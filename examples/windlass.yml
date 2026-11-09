@@ -32,7 +32,7 @@ jobs:
         uses: PlusCosmic/windlass@master
         with:
           pull-request: ${{ inputs.pull-request }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windlass-decisions-${{ github.run_id }}
           path: ${{ steps.windlass.outputs.decision-dir }}
