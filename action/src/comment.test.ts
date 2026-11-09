@@ -88,6 +88,17 @@ describe("renderComment", () => {
     expect(body).toContain("too large for a comment");
   });
 
+  it("shows the declared category even when the policy is invalid", () => {
+    const body = renderComment(
+      decision({
+        category: null,
+        policy: { version: null, hash: "0".repeat(64), errors: [{ path: "", message: "no policy file" }] },
+      }),
+    );
+    expect(body).toContain("category `docs_only` · head `bbbbbbb` · policy invalid");
+    expect(renderComment(decision({ category: null, intent: null }))).toContain("no valid `windlass` block");
+  });
+
   it("refuses to render a pending decision", () => {
     expect(() => renderComment(decision({ outcome: "pending" }))).toThrow();
   });

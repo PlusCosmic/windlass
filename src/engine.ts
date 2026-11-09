@@ -54,13 +54,17 @@ export async function decide(input: PullRequestInput, options: DecideOptions): P
     if (outcome !== "merge") reasons.push(reason);
   };
 
+  // Read before anything can return early, so every record says what the PR declared.
+  const parsedIntent = parseIntent(input.body);
+  const intent: Intent | null = parsedIntent.ok ? parsedIntent.intent : null;
+
   const record: DecisionRecord = {
     schema: "windlass.decision/v1",
     outcome: "escalate",
     reasons,
     path: ["policy"],
     category: null,
-    intent: null,
+    intent,
     gates: [],
     evaluators: [],
     changes: null,
@@ -107,9 +111,6 @@ export async function decide(input: PullRequestInput, options: DecideOptions): P
   );
 
   record.path.push("intent");
-  const parsedIntent = parseIntent(input.body);
-  const intent: Intent | null = parsedIntent.ok ? parsedIntent.intent : null;
-  record.intent = intent;
   if (!parsedIntent.ok) contribute("escalate", `intent: ${parsedIntent.reason}`);
 
   for (const node of policy.defaults.always) {

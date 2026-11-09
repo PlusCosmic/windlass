@@ -41,7 +41,8 @@ export function renderComment(decision: DecisionRecord): string {
     `### Windlass: ${HEADLINES[decision.outcome]}`,
     "",
     [
-      decision.category ? `category ${code(decision.category)}` : "no valid category",
+      // The declared category, even when the walk stopped before resolving it (e.g. an invalid policy).
+      decision.intent ? `category ${code(decision.intent.category)}` : "no valid `windlass` block",
       `head ${code(decision.headSha.slice(0, 7))}`,
       decision.policy.version
         ? `policy ${code(decision.policy.version)} (${code(decision.policy.hash.slice(0, 12))})`

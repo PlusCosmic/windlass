@@ -33735,7 +33735,8 @@ function renderComment(decision) {
     `### Windlass: ${HEADLINES[decision.outcome]}`,
     "",
     [
-      decision.category ? `category ${code(decision.category)}` : "no valid category",
+      // The declared category, even when the walk stopped before resolving it (e.g. an invalid policy).
+      decision.intent ? `category ${code(decision.intent.category)}` : "no valid `windlass` block",
       `head ${code(decision.headSha.slice(0, 7))}`,
       decision.policy.version ? `policy ${code(decision.policy.version)} (${code(decision.policy.hash.slice(0, 12))})` : "policy invalid",
       `engine ${code(decision.engineVersion)}`
@@ -54255,13 +54256,15 @@ async function decide(input2, options) {
     contributions.push(outcome);
     if (outcome !== "merge") reasons.push(reason);
   };
+  const parsedIntent = parseIntent(input2.body);
+  const intent = parsedIntent.ok ? parsedIntent.intent : null;
   const record2 = {
     schema: "windlass.decision/v1",
     outcome: "escalate",
     reasons,
     path: ["policy"],
     category: null,
-    intent: null,
+    intent,
     gates: [],
     evaluators: [],
     changes: null,
@@ -54304,9 +54307,6 @@ async function decide(input2, options) {
     `changes Windlass policy files: ${protectedTouched.join(", ")}`
   );
   record2.path.push("intent");
-  const parsedIntent = parseIntent(input2.body);
-  const intent = parsedIntent.ok ? parsedIntent.intent : null;
-  record2.intent = intent;
   if (!parsedIntent.ok) contribute("escalate", `intent: ${parsedIntent.reason}`);
   for (const node2 of policy.defaults.always) {
     record2.path.push(node2.id);

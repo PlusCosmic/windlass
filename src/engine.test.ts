@@ -157,6 +157,14 @@ describe("decide", () => {
     expect(decision.policy.errors.length).toBeGreaterThan(0);
   });
 
+  it("records the declared intent even when it stops early", async () => {
+    const invalidPolicy = await decide(pr("docs_only"), { policy: "policy: [" });
+    const badDiff = await decide(pr("docs_only", { diff: "--- a/x\n+++ b/x\n@@ -1,5 +1,5 @@\n a\n" }), { policy });
+    for (const decision of [invalidPolicy, badDiff]) {
+      expect(decision).toMatchObject({ outcome: "escalate", intent: { category: "docs_only" }, category: null });
+    }
+  });
+
   it("turns a throwing gate into an escalation", async () => {
     const gates = defaultGateRegistry().register(
       defineGate({
