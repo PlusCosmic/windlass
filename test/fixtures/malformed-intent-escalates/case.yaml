@@ -1,0 +1,13 @@
+description: A windlass block that isn't a valid intent escalates
+body: |
+  ```windlass
+  category: [docs_only, test_only]
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  reasons: ["malformed"]

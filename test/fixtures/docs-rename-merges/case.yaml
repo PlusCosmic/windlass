@@ -1,0 +1,14 @@
+description: A pure rename between docs paths merges
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: merge

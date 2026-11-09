@@ -1,0 +1,15 @@
+description: Evaluators fail closed until a runner is wired in
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  reasons: ["no evaluator runner is configured"]

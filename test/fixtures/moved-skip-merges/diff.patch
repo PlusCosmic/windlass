@@ -1,0 +1,20 @@
+diff --git a/test/math.test.ts b/test/math.test.ts
+index c9119ed..6501db0 100644
+--- a/test/math.test.ts
++++ b/test/math.test.ts
+@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
+ import { add } from "../src/math";
+ 
+ describe("add", () => {
+-  it.skip("handles floats", () => {
+-    expect(add(0.1, 0.2)).toBeCloseTo(0.3);
+-  });
+-
+   it("adds integers", () => {
+     expect(add(1, 2)).toBe(3);
+   });
++
++  it.skip("handles floats", () => {
++    expect(add(0.1, 0.2)).toBeCloseTo(0.3);
++  });
+ });

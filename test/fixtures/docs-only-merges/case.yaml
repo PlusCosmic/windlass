@@ -1,0 +1,19 @@
+description: README and docs edits with green CI merge
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: merge
+  category: docs_only
+  gates:
+    always[0]:no_new_skips: pass
+    always[1]:ci_green: pass
+    docs_only[0]:paths_only: pass

@@ -1,0 +1,17 @@
+description: Turning a passing test into it.skip blocks
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: test_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: block
+  reasons: ["new skip or suppression marker"]
+  gates:
+    always[0]:no_new_skips: fail

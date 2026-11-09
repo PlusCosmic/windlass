@@ -1,0 +1,21 @@
+# Phase 1 policy: gates only, run in shadow mode. Copy to .windlass/policy.yaml.
+policy: v1
+defaults:
+  always:
+    - gate: no_new_skips
+    - gate: ci_green
+      with: { ignore: [windlass] }
+  on_evaluator_error: escalate
+
+categories:
+  docs_only:
+    gates:
+      - paths_only: ["**/*.md", "docs/**"]
+    outcome: merge
+
+  test_only:
+    gates:
+      - paths_only: ["**/test/**", "**/tests/**", "**/*.test.ts", "**/*_test.go"]
+    outcome: merge
+
+fallback: escalate

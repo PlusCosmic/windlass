@@ -1,0 +1,12 @@
+description: A block is final even while CI is still running
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: test_only
+  ```
+ci:
+  - name: test
+    status: queued
+expect:
+  outcome: block

@@ -1,0 +1,17 @@
+description: Red CI escalates
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: failure
+expect:
+  outcome: escalate
+  reasons: ["test (failure)"]
+  gates:
+    always[1]:ci_green: fail

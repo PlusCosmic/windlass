@@ -1,0 +1,6 @@
+policy: v1
+categories:
+  docs_only:
+    gates:
+      - no_migrations
+    outcome: merge

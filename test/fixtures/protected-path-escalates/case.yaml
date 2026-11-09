@@ -1,0 +1,17 @@
+description: Markdown under .windlass/ passes paths_only but policy files always escalate
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  reasons: ["changes Windlass policy files: .windlass/README.md"]
+  gates:
+    docs_only[0]:paths_only: pass

@@ -1,0 +1,9 @@
+policy: v1
+categories:
+  docs_only:
+    gates:
+      - paths_only: ["**/*.md", "docs/**"]
+    evaluators:
+      - id: docs_are_accurate
+        min_confidence: 0.9
+    outcome: merge

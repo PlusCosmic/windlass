@@ -1,0 +1,15 @@
+description: A policy referencing an unknown gate is invalid, and everything escalates
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  reasons: ["policy is invalid"]

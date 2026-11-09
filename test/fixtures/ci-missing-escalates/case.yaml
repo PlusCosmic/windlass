@@ -1,0 +1,12 @@
+description: No CI status collected is a gate error, which escalates
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+expect:
+  outcome: escalate
+  reasons: ["CI status was not collected"]
+  gates:
+    always[1]:ci_green: error

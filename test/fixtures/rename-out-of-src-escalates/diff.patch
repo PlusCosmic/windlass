@@ -1,0 +1,4 @@
+diff --git a/src/math.ts b/docs/math.md
+similarity index 100%
+rename from src/math.ts
+rename to docs/math.md

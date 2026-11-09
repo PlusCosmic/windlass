@@ -1,0 +1,16 @@
+description: Renaming src/math.ts to docs/math.md removes production code, so the old path counts
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  gates:
+    docs_only[0]:paths_only: fail

@@ -1,0 +1,16 @@
+description: CI still running defers the decision
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: docs_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    status: in_progress
+expect:
+  outcome: pending
+  gates:
+    always[1]:ci_green: pending

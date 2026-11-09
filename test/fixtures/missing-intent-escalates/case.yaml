@@ -1,0 +1,14 @@
+description: No windlass block means no declared intent; always-gates still run
+body: |
+  This PR only touches docs, trust me. category: docs_only
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  category: null
+  reasons: ["no `windlass` block"]
+  gates:
+    always[1]:ci_green: pass

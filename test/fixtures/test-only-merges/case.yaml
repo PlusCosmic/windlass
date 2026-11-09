@@ -1,0 +1,15 @@
+description: Adding a new test file merges
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: test_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: merge
+  category: test_only

@@ -1,0 +1,16 @@
+description: A category the policy doesn't define goes to the fallback
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: refactor
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: escalate
+  category: null
+  reasons: ["category `refactor` is not defined"]

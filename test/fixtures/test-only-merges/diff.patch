@@ -1,0 +1,11 @@
+diff --git a/test/sub.test.ts b/test/sub.test.ts
+new file mode 100644
+index 0000000..b537c46
+--- /dev/null
++++ b/test/sub.test.ts
+@@ -0,0 +1,5 @@
++import { expect, it } from "vitest";
++
++it("subtracts", () => {
++  expect(1 - 1).toBe(0);
++});

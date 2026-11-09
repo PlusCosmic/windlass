@@ -1,0 +1,4 @@
+dist
+coverage
+bun.lock
+test/fixtures/**/*.patch
