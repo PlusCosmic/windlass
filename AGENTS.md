@@ -11,8 +11,9 @@ Windlass is a policy engine that decides, for each agent-authored pull request, 
   - `evaluators/types.ts` defines the LLM evaluator contract (`EvaluatorRunner`, `VerdictSchema`). No runner is implemented yet.
   - `engine.ts` (`decide`) walks the policy and returns a `DecisionRecord` (`decision.ts`).
   - `harness.ts` (`@pluscosmic/windlass/harness`) runs fixtures from disk.
+- `action/` is the GitHub Action (`action.yml` at the repo root). `action/src/run.ts` holds the logic against the `GitHubPort` interface (`port.ts`), `octokit.ts` implements it, `comment.ts` renders decisions, and `main.ts` is the entry point. `action/dist/index.mjs` is the committed esbuild bundle: after changing `src/` or `action/src/`, run `bun run build:action` and commit the result.
 - `test/fixtures/<case>/` holds `case.yaml` (PR body, CI, expected decision) and `diff.patch`; `test/fixtures/policy.yaml` is their default policy. Each case runs as a test in `test/fixtures.test.ts`.
-- `examples/policy.yaml` is the phase 1 policy to copy into a pilot repo.
+- `examples/` holds the phase 1 policy and workflow to copy into a pilot repo.
 
 ## Engine Rules
 
@@ -25,10 +26,12 @@ These come from the brief and are what the tests protect; don't loosen them with
 - Evaluators get the diff, structured intent and gate-computed facts. Never pass them the PR body, commit messages or code review text.
 - Changes under `.windlass/` always escalate. Policies are loaded from the base branch, never the PR head.
 - Policies naming an unknown gate are invalid; don't skip unknown gates.
+- The Action only runs in shadow mode: it comments and labels, never merges. It reads PR content through the API and never checks out or runs PR code.
+- PR comments render attacker-controlled text (paths, code, reasons); keep everything dynamic going through `text()`/`code()` in `comment.ts`.
 
 ## Commands
 
 - Install with `bun install`; the repo pins `bun@1.3.13`. Code targets Node 22+ (GitHub Actions runtime).
-- `bun run check` runs typecheck, lint, test, build and format:check.
-- `bun run test` is Vitest over `src/**/*.test.ts` and `test/**/*.test.ts`.
+- `bun run check` runs typecheck, lint, test, build, build:action and format:check.
+- `bun run test` is Vitest over `src/`, `test/` and `action/src/`.
 - Add a behaviour case as a fixture: make the diff with real `git diff` rather than writing hunks by hand.

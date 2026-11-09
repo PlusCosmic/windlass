@@ -1,0 +1,38 @@
+name: Windlass PR Policy
+description: Decide whether an agent-authored pull request should merge, escalate to a human, or block.
+author: PlusCosmic
+branding:
+  icon: anchor
+  color: blue
+
+inputs:
+  github-token:
+    description: Token for reading the PR and CI and for commenting and labelling.
+    default: ${{ github.token }}
+  policy-path:
+    description: Policy file, read from the PR's base branch.
+    default: .windlass/policy.yaml
+  mode:
+    description: Only `shadow` is supported, which reports decisions and never merges.
+    default: shadow
+  ignore-checks:
+    description: Check names (one per line) not to count as CI. The Windlass job's own check is always ignored.
+    default: ""
+  comment-author:
+    description: Login the token comments as; only that user's Windlass comments are updated.
+    default: github-actions[bot]
+  pull-request:
+    description: PR number to evaluate, for manual (workflow_dispatch) runs.
+    default: ""
+
+outputs:
+  outcome:
+    description: merge, escalate, block or pending, when exactly one PR was evaluated.
+  decisions:
+    description: JSON array of decision records.
+  decision-dir:
+    description: Directory holding decision-<number>.json for each evaluated PR.
+
+runs:
+  using: node24
+  main: action/dist/index.mjs

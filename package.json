@@ -28,7 +28,9 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "bun run typecheck && bun run lint && bun run test && bun run build && bun run format:check"
+    "check": "bun run typecheck && bun run lint && bun run test && bun run build && bun run build:action && bun run format:check",
+    "build:action": "node action/build.mjs",
+    "check:action-dist": "bun run build:action && git diff --exit-code -- action/dist"
   },
   "dependencies": {
     "picomatch": "^4.0.7",
@@ -36,9 +38,12 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
     "@types/picomatch": "^4.0.3",
+    "esbuild": "^0.28.2",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",

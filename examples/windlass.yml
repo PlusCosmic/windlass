@@ -1,0 +1,39 @@
+# Copy to .github/workflows/windlass.yml in the repo Windlass should judge.
+# Runs in shadow mode: it comments and labels, and never merges.
+name: Windlass
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  # Re-decide once CI finishes. List the workflows whose checks ci_green waits on.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pull-request:
+        description: PR number to evaluate
+        required: true
+
+permissions:
+  contents: read # policy file on the base branch
+  pull-requests: write # read the PR and diff
+  issues: write # comment and label
+  checks: read
+  statuses: read
+
+jobs:
+  # The job's check is named after this key and Windlass ignores it, so it never
+  # waits on itself. If you give the job a `name:`, add it to `ignore-checks`.
+  windlass:
+    runs-on: ubuntu-latest
+    steps:
+      - id: windlass
+        uses: PlusCosmic/windlass@master
+        with:
+          pull-request: ${{ inputs.pull-request }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windlass-decisions-${{ github.run_id }}
+          path: ${{ steps.windlass.outputs.decision-dir }}
+          if-no-files-found: ignore
