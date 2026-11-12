@@ -1,0 +1,13 @@
+diff --git a/desktop/monitor/tests/dashboards.rs b/desktop/monitor/tests/dashboards.rs
+index 95c282e..f90cad5 100644
+--- a/desktop/monitor/tests/dashboards.rs
++++ b/desktop/monitor/tests/dashboards.rs
+@@ -3,6 +3,7 @@ use monitor::ui::SegmentedControl;
+ #[test]
+ fn range_picker_has_three_options() {
+     let control = SegmentedControl::new(&["1h", "24h", "7d"])
+-        .label("Range");
++        .label("Range")
++        .fit();
+     assert_eq!(control.options().len(), 3);
+ }

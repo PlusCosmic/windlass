@@ -1,0 +1,11 @@
+diff --git a/test/layout.test.ts b/test/layout.test.ts
+index 500dad5..8de7eda 100644
+--- a/test/layout.test.ts
++++ b/test/layout.test.ts
+@@ -3,5 +3,6 @@ import { Layout } from "../src/layout.js";
+ 
+ it("lays out two columns", () => {
+   const layout = new Layout({ columns: 2 });
++  layout.fit();
+   expect(layout.width).toBe(640);
+ });

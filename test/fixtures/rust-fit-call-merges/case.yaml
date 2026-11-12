@@ -1,0 +1,16 @@
+description: A Rust .fit() builder call isn't a focused JS test
+body: |
+  Agent-written description that the engine must ignore.
+
+  ```windlass
+  category: test_only
+  ```
+ci:
+  - name: build
+    conclusion: success
+  - name: test
+    conclusion: success
+expect:
+  outcome: merge
+  gates:
+    always[0]:no_new_skips: pass
