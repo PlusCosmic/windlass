@@ -26,11 +26,11 @@ category: docs_only
 
 Every node contributes an outcome, and the most severe one wins: `block` > `pending` > `escalate` > `merge`. `pending` means CI is still running, so the adapter should wait for the next event instead of acting.
 
-| Gate                                     | Passes when                                                                                       | Fails →  |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------- | -------- |
-| `paths_only: [globs]`                    | every changed path, including the old side of renames, matches a glob                             | escalate |
-| `ci_green` (`required`, `ignore`)        | every check (or every required check) passed; pending while any are running                       | escalate |
-| `no_new_skips` (`extra`, `ignore_paths`) | no added test skip/focus or lint/type/coverage suppression in code files; moved lines don't count | block    |
+| Gate                                     | Passes when                                                                                                                                      | Fails →  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `paths_only: [globs]`                    | every changed path, including the old side of renames, matches a glob                                                                            | escalate |
+| `ci_green` (`required`, `ignore`)        | every check (or every required check) passed; pending while any are running                                                                      | escalate |
+| `no_new_skips` (`extra`, `ignore_paths`) | no added test skip/focus or lint/type/coverage suppression in code files, each language's markers only in its own files; moved lines don't count | block    |
 
 Any gate takes `on_fail: escalate | block` to override its default.
 

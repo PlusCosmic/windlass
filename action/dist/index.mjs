@@ -53922,34 +53922,68 @@ function describe3(check2) {
 }
 
 // src/gates/no-new-skips.ts
+var JS_FILES = ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue,svelte}"];
+var PYTHON_FILES = ["**/*.{py,pyi}"];
+var GO_FILES = ["**/*.go"];
+var JVM_FILES = ["**/*.{java,kt,kts,scala,groovy}"];
+var DOTNET_FILES = ["**/*.{cs,fs,vb}"];
+var RUST_FILES = ["**/*.rs"];
 var SKIP_MARKERS = [
-  // JS/TS test runners (jest, vitest, mocha, bun:test): it.skip, describe.only, test.todo, test.skipIf(...)
+  // JS/TS test runners (jest, vitest, mocha, bun:test): it.skip, describe.only, test.todo, test.skipIf(...).
+  // The runner globals are bare names, so a property or method (`foo.it.skip`, `model.fit(`) doesn't count.
   {
     id: "js-test-modifier",
-    pattern: /\b(?:it|test|describe|context|suite|specify|bench)(?:\.\w+)*\.(?:skip|only|todo|skipIf|runIf|fails)\b/
+    pattern: /(?<![.\w$])(?:it|test|describe|context|suite|specify|bench)(?:\.\w+)*\.(?:skip|only|todo|skipIf|runIf|fails)\b/,
+    files: JS_FILES
   },
-  { id: "js-test-prefix", pattern: /\b(?:xit|xtest|xdescribe|xcontext|xspecify|fit|fdescribe)\s*\(/ },
+  {
+    id: "js-test-prefix",
+    pattern: /(?<![.\w$])(?:xit|xtest|xdescribe|xcontext|xspecify|fit|fdescribe)\s*\(/,
+    files: JS_FILES
+  },
+  // eslint, TypeScript, biome, oxlint, tslint: all JS/TS tooling
   {
     id: "lint-suppression",
-    pattern: /eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|biome-ignore|oxlint-disable|tslint:disable/
+    pattern: /eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|biome-ignore|oxlint-disable|tslint:disable/,
+    files: JS_FILES
   },
   { id: "coverage-ignore", pattern: /\b(?:istanbul|c8|v8) ignore\b|pragma:\s*no cover|ExcludeFromCodeCoverage/ },
   // JUnit / TestNG / Kotlin
-  { id: "jvm-disabled", pattern: /@(?:Disabled|Ignore)\b|@Test\s*\([^)]*\benabled\s*=\s*false/ },
+  { id: "jvm-disabled", pattern: /@(?:Disabled|Ignore)\b|@Test\s*\([^)]*\benabled\s*=\s*false/, files: JVM_FILES },
   {
     id: "python-skip",
-    pattern: /@pytest\.mark\.(?:skip|skipif|xfail)\b|\bpytest\.(?:skip|xfail)\s*\(|@unittest\.(?:skip|skipIf|skipUnless|expectedFailure)\b|\.skipTest\s*\(/
+    pattern: /@pytest\.mark\.(?:skip|skipif|xfail)\b|\bpytest\.(?:skip|xfail)\s*\(|@unittest\.(?:skip|skipIf|skipUnless|expectedFailure)\b|\.skipTest\s*\(/,
+    files: PYTHON_FILES
   },
-  { id: "python-suppression", pattern: /#\s*(?:noqa\b|type:\s*ignore\b|pyright:\s*ignore\b|pylint:\s*disable)/ },
-  { id: "go-skip", pattern: /\b[tb]\.(?:Skip|SkipNow|Skipf)\s*\(|\/\/\s*nolint\b/ },
+  {
+    id: "python-suppression",
+    pattern: /#\s*(?:noqa\b|type:\s*ignore\b|pyright:\s*ignore\b|pylint:\s*disable)/,
+    files: PYTHON_FILES
+  },
+  { id: "go-skip", pattern: /\b[tb]\.(?:Skip|SkipNow|Skipf)\s*\(|\/\/\s*nolint\b/, files: GO_FILES },
   // xUnit, NUnit, MSTest
   {
     id: "dotnet-skip",
-    pattern: /\[\s*(?:Fact|Theory|SkippableFact|SkippableTheory)\s*\([^)]*\bSkip\s*=|\[\s*(?:Ignore|Explicit)\b|\bSkip\.(?:If|IfNot)\s*\(|\bAssert\.Inconclusive\s*\(/
+    pattern: /\[\s*(?:Fact|Theory|SkippableFact|SkippableTheory)\s*\([^)]*\bSkip\s*=|\[\s*(?:Ignore|Explicit)\b|\bSkip\.(?:If|IfNot)\s*\(|\bAssert\.Inconclusive\s*\(/,
+    files: DOTNET_FILES
   },
-  { id: "dotnet-suppression", pattern: /#pragma\s+warning\s+disable|\[\s*(?:assembly:\s*)?SuppressMessage\b/ },
-  { id: "rust-ignore", pattern: /#\[ignore\b|#!?\[allow\s*\(/ }
+  {
+    id: "dotnet-suppression",
+    pattern: /#pragma\s+warning\s+disable|\[\s*(?:assembly:\s*)?SuppressMessage\b/,
+    files: DOTNET_FILES
+  },
+  { id: "rust-ignore", pattern: /#\[ignore\b|#!?\[allow\s*\(/, files: RUST_FILES }
 ];
+var appliesTo = /* @__PURE__ */ new Map();
+function applies(marker, path) {
+  if (!marker.files) return true;
+  let matches = appliesTo.get(marker);
+  if (!matches) {
+    matches = globMatcher(marker.files);
+    appliesTo.set(marker, matches);
+  }
+  return matches(path);
+}
 var CODE_FILES = globMatcher([
   "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue,svelte}",
   "**/*.{py,pyi,go,java,kt,kts,scala,groovy,cs,fs,vb,rs,rb,php,swift,c,cc,cpp,cxx,h,hpp}"
@@ -53981,13 +54015,13 @@ var noNewSkips = defineGate({
     const removed = /* @__PURE__ */ new Map();
     for (const file2 of files) {
       for (const { text: text2 } of file2.removedLines) {
-        if (markerOf(text2, markers)) removed.set(text2.trim(), (removed.get(text2.trim()) ?? 0) + 1);
+        if (markerOf(text2, file2.path, markers)) removed.set(text2.trim(), (removed.get(text2.trim()) ?? 0) + 1);
       }
     }
     const evidence2 = [];
     for (const file2 of files) {
       for (const { line, text: text2 } of file2.addedLines) {
-        const marker = markerOf(text2, markers);
+        const marker = markerOf(text2, file2.path, markers);
         if (!marker) continue;
         const key = text2.trim();
         const offset = removed.get(key) ?? 0;
@@ -54006,8 +54040,8 @@ var noNewSkips = defineGate({
     };
   }
 });
-function markerOf(text2, markers) {
-  return markers.find((marker) => marker.pattern.test(text2));
+function markerOf(text2, path, markers) {
+  return markers.find((marker) => applies(marker, path) && marker.pattern.test(text2));
 }
 
 // src/gates/paths-only.ts

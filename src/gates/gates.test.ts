@@ -136,8 +136,48 @@ describe("no_new_skips", () => {
     ["test/a.test.ts", '  it("skips nothing", () => {'],
     ["src/a.ts", "const skip = items.skip(2);"],
     ["src/a.ts", "const testOnly = true;"],
+    ["src/a.ts", "  const control = SegmentedControl.new(options).fit();"],
+    ["src/a.ts", "  model.fit(x, y);"],
+    ["src/a.ts", "    .fit ()"],
+    ["src/a.ts", "  this.xit(1);"],
+    ["src/a.ts", "  $fit(1);"],
+    ["src/a.ts", "  foo.it.skip(1);"],
+    ["src/a.ts", "  obj.describe.only = true;"],
+    ["src/ui.rs", "    SegmentedControl::new(options).label(label).fit()"],
+    ["src/ui.rs", '    fit("works", || {});'],
+    ["src/ui.rs", "    let suite = it.skip(2);"],
+    ["src/a.py", "model.fit(x, y)"],
+    ["src/a.py", "#[ignore]"],
+    ["src/a.rs", "// eslint-disable-next-line"],
+    ["src/a.ts", "  t.Skip()"],
+    ["src/A.cs", "  # type: ignore"],
   ])("leaves ordinary code alone in %s: %s", (path, line) => {
     expect(run([file(path, [line])])).toMatchObject({ status: "pass" });
+  });
+
+  it.each([
+    ["test/a.test.ts", '  fit("works", () => {'],
+    ["test/a.test.ts", 'fit ("works", () => {'],
+    ["test/a.test.ts", '  xdescribe("suite", () => {'],
+    ["test/a.test.tsx", '  fdescribe("suite", () => {'],
+    ["test/a.spec.js", '  describe.skip("suite", () => {'],
+    ["src/App.vue", '  it.only("works", () => {'],
+  ])("still flags focused or excluded JS tests in %s: %s", (path, line) => {
+    expect(run([file(path, [line])])).toMatchObject({ status: "fail" });
+  });
+
+  it("checks each built-in marker only in its own language", () => {
+    expect(run([file("src/lib.rs", ["#[ignore]"])]).evidence).toEqual([
+      { file: "src/lib.rs", line: 1, detail: "rust-ignore: #[ignore]" },
+    ]);
+    expect(run([file("src/lib.py", ["#[ignore]"])])).toMatchObject({ status: "pass" });
+    expect(run([file("src/a.py", ["@pytest.mark.skip"])])).toMatchObject({ status: "fail" });
+    expect(run([file("src/a.go", ["@pytest.mark.skip"])])).toMatchObject({ status: "pass" });
+  });
+
+  it("checks coverage-ignore and extra patterns in every code file", () => {
+    expect(run([file("src/a.rb", ["# pragma: no cover"])])).toMatchObject({ status: "fail" });
+    expect(run([file("src/lib.rs", ["// HACK: skip"])], { extra: ["HACK:"] })).toMatchObject({ status: "fail" });
   });
 
   it("ignores markers in non-code files", () => {
