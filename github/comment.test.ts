@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DecisionRecord } from "../../src/index.js";
+import type { DecisionRecord } from "../src/index.js";
 import { COMMENT_MARKER, commentSha, renderComment, renderWaiting } from "./comment.js";
 
 function decision(overrides: Partial<DecisionRecord> = {}): DecisionRecord {
@@ -10,6 +10,7 @@ function decision(overrides: Partial<DecisionRecord> = {}): DecisionRecord {
     path: ["policy", "intent"],
     category: "docs_only",
     intent: { category: "docs_only" },
+    builtins: [],
     gates: [],
     evaluators: [],
     changes: { files: ["README.md"], additions: 1, deletions: 1 },

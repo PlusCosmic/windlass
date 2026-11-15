@@ -1,28 +1,31 @@
-import type { getOctokit } from "@actions/github";
-import type { CheckRun } from "../../src/index.js";
+import type { Octokit as RestOctokit } from "@octokit/rest";
+import type { CheckRun } from "../src/index.js";
 import { COMMENT_MARKER } from "./comment.js";
 import type { Comment, GitHubPort, PullRequestData } from "./port.js";
 
-type Octokit = ReturnType<typeof getOctokit>;
+/** The REST and pagination surface the Action's client and the App's `@octokit/rest` client share. */
+export type Octokit = Pick<RestOctokit, "rest" | "paginate">;
 
 export interface OctokitPortOptions {
   owner: string;
   repo: string;
-  /** This workflow run's id; its own check runs are never counted as CI. */
-  runId: number;
+  /** The Action's workflow run id; its own check runs are never counted as CI. */
+  runId?: number;
   /** Check names to leave out of CI, such as the Windlass job's own name. */
-  ignoreChecks: readonly string[];
+  ignoreChecks?: readonly string[];
+  /** Slugs of GitHub Apps whose check runs are never counted as CI: the Windlass App's own. */
+  ignoreApps?: readonly string[];
   /** Login Windlass comments as; only its comments are ever edited. */
   commentAuthor: string;
 }
 
 export class OctokitPort implements GitHubPort {
   constructor(
-    private readonly octokit: Octokit,
-    private readonly options: OctokitPortOptions,
+    protected readonly octokit: Octokit,
+    protected readonly options: OctokitPortOptions,
   ) {}
 
-  private get repo() {
+  protected get repo() {
     return { owner: this.options.owner, repo: this.options.repo };
   }
 
@@ -32,6 +35,9 @@ export class OctokitPort implements GitHubPort {
       number: data.number,
       state: data.state === "open" ? "open" : "closed",
       draft: data.draft ?? false,
+      merged: data.merged,
+      title: data.title,
+      author: data.user?.login ?? "",
       body: data.body ?? "",
       baseRef: data.base.ref,
       baseSha: data.base.sha,
@@ -71,8 +77,9 @@ export class OctokitPort implements GitHubPort {
   }
 
   async getChecks(sha: string): Promise<CheckRun[]> {
-    const ignored = new Set(this.options.ignoreChecks);
-    const ownRun = `/actions/runs/${this.options.runId}/`;
+    const ignored = new Set(this.options.ignoreChecks ?? []);
+    const ignoredApps = new Set(this.options.ignoreApps ?? []);
+    const ownRun = this.options.runId === undefined ? null : `/actions/runs/${this.options.runId}/`;
 
     const runs = await this.octokit.paginate(this.octokit.rest.checks.listForRef, {
       ...this.repo,
@@ -81,7 +88,8 @@ export class OctokitPort implements GitHubPort {
       per_page: 100,
     });
     const checks: CheckRun[] = runs
-      .filter((run) => !ignored.has(run.name) && !(run.details_url ?? "").includes(ownRun))
+      .filter((run) => !ignored.has(run.name) && !ignoredApps.has(run.app?.slug ?? ""))
+      .filter((run) => ownRun === null || !(run.details_url ?? "").includes(ownRun))
       .map((run) => ({
         name: run.name,
         status: run.status === "completed" ? "completed" : run.status === "queued" ? "queued" : "in_progress",

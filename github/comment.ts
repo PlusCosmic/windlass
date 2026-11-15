@@ -1,4 +1,4 @@
-import type { DecisionRecord, Evidence } from "../../src/index.js";
+import type { DecisionRecord, Evidence } from "../src/index.js";
 
 /** Every Windlass comment starts with this; the head SHA it describes follows it. */
 export const COMMENT_MARKER = "<!-- windlass:decision";

@@ -20,6 +20,16 @@ export interface GateRecord {
   evidence: Evidence[];
 }
 
+/** The checks the engine runs on every PR before the policy's own nodes. */
+export type BuiltinNode = "policy" | "protected_paths" | "intent";
+
+export interface BuiltinRecord {
+  node: BuiltinNode;
+  status: "pass" | "fail";
+  /** Why it failed; empty on pass. */
+  reason: string;
+}
+
 export type EvaluatorStatus = "pass" | "fail" | "low_confidence" | "error" | "skipped";
 
 export interface EvaluatorRecord {
@@ -44,6 +54,8 @@ export interface DecisionRecord {
   path: string[];
   category: string | null;
   intent: Intent | null;
+  /** One entry per built-in check that ran, in order. A failed one escalates. */
+  builtins: BuiltinRecord[];
   gates: GateRecord[];
   evaluators: EvaluatorRecord[];
   changes: { files: string[]; additions: number; deletions: number } | null;

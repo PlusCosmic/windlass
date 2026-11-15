@@ -16,7 +16,18 @@ export interface LoadedPolicy {
   hash: string;
 }
 
-export type PolicyResult = ({ ok: true } & LoadedPolicy) | { ok: false; errors: PolicyError[]; hash: string };
+export type PolicyResult =
+  | ({ ok: true } & LoadedPolicy)
+  | {
+      ok: false;
+      errors: PolicyError[];
+      hash: string;
+      /**
+       * The policy as far as it could be read, when the file's structure is sound but a gate is
+       * unknown or its arguments are wrong. For editors to draw; the engine never walks it.
+       */
+      partial?: Policy;
+    };
 
 const NAME = /^[a-z][a-z0-9_]*$/;
 const FailOutcomeSchema = z.enum(["escalate", "block"]);
@@ -98,17 +109,14 @@ export function parsePolicy(source: string, registry: GateRegistry): PolicyResul
     };
   }
 
-  if (errors.length > 0) return { ok: false, hash, errors };
-  return {
-    ok: true,
-    hash,
-    policy: {
-      version: data.policy,
-      defaults: { always, onEvaluatorError: data.defaults.on_evaluator_error },
-      categories,
-      fallback: data.fallback,
-    },
+  const policy: Policy = {
+    version: data.policy,
+    defaults: { always, onEvaluatorError: data.defaults.on_evaluator_error },
+    categories,
+    fallback: data.fallback,
   };
+  if (errors.length > 0) return { ok: false, hash, errors, partial: policy };
+  return { ok: true, hash, policy };
 }
 
 /**

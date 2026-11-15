@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+dist
+app/dist
+web/dist
+action/dist
+coverage
+.data
+.env
+.env.*
+test
+docs
+examples
