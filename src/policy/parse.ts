@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { parse as parseYaml, YAMLParseError } from "yaml";
 import { z } from "zod";
+import { evaluatorPreset } from "../evaluators/presets.js";
+import { isQuestionPlaceholder, MAX_QUESTION_LENGTH, questionPlaceholders } from "../evaluators/question.js";
 import type { GateRegistry } from "../gates/registry.js";
 import type { Category, EvaluatorNode, FailOutcome, GateNode, Policy } from "./types.js";
 
@@ -36,6 +38,7 @@ const RawGate = z.union([z.string(), z.record(z.string(), z.unknown())]);
 
 const RawEvaluator = z.strictObject({
   id: z.string().regex(NAME, "must be a snake_case evaluator name"),
+  question: z.string().trim().min(1).max(MAX_QUESTION_LENGTH).optional(),
   min_confidence: z.number().min(0).max(1),
   model: z.string().min(1).optional(),
 });
@@ -96,15 +99,9 @@ export function parsePolicy(source: string, registry: GateRegistry): PolicyResul
       gates: category.gates.map((entry, i) =>
         normalizeGate(entry, `categories.${name}.gates[${i}]`, `${name}[${i}]`, registry, errors),
       ),
-      evaluators: category.evaluators.map((entry, i): EvaluatorNode => {
-        const node: EvaluatorNode = {
-          id: `${name}.eval[${i}]:${entry.id}`,
-          evaluator: entry.id,
-          minConfidence: entry.min_confidence,
-        };
-        if (entry.model !== undefined) node.model = entry.model;
-        return node;
-      }),
+      evaluators: category.evaluators.map((entry, i) =>
+        normalizeEvaluator(entry, `categories.${name}.evaluators[${i}]`, `${name}.eval[${i}]`, errors),
+      ),
       outcome: category.outcome,
     };
   }
@@ -117,6 +114,40 @@ export function parsePolicy(source: string, registry: GateRegistry): PolicyResul
   };
   if (errors.length > 0) return { ok: false, hash, errors, partial: policy };
   return { ok: true, hash, policy };
+}
+
+/**
+ * An evaluator asks its own `question`, or the built-in one for its name. One
+ * with neither is invalid, like an unknown gate: there is nothing to ask.
+ */
+function normalizeEvaluator(
+  entry: z.infer<typeof RawEvaluator>,
+  path: string,
+  idPrefix: string,
+  errors: PolicyError[],
+): EvaluatorNode {
+  const preset = evaluatorPreset(entry.id);
+  if (entry.question === undefined && !preset) {
+    errors.push({
+      path,
+      message: `evaluator \`${entry.id}\` has no \`question\` and is not a built-in evaluator`,
+    });
+  }
+  const question = entry.question ?? preset?.question ?? "";
+  for (const name of questionPlaceholders(question)) {
+    if (!isQuestionPlaceholder(name)) {
+      errors.push({ path: `${path}.question`, message: `unknown placeholder \`{{${name}}}\`` });
+    }
+  }
+  const node: EvaluatorNode = {
+    id: `${idPrefix}:${entry.id}`,
+    evaluator: entry.id,
+    question,
+    questionFromPreset: entry.question === undefined,
+    minConfidence: entry.min_confidence,
+  };
+  if (entry.model !== undefined) node.model = entry.model;
+  return node;
 }
 
 /**

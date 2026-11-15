@@ -18,10 +18,11 @@ import { cx, useAppearance } from "@pluscosmic/ui";
 import { memo, useEffect, useMemo } from "react";
 import { ROUTER_NODE, type FlowGraph, type FlowNode, type Trace, type TraceStatus } from "../../src/graph";
 import { copy } from "./copy/app";
+import { formatConfidence } from "./evaluators";
 import { layoutGraph } from "./layout";
 import type { NodeTally, Replay } from "./trace";
 
-/** What the "+" on an edge adds to: a category's gates, or the always-gates (null). */
+/** What the "+" on an edge adds to: a category's gates and evaluators, or the always-gates (null). */
 export type AddTarget = { category: string | null };
 
 interface CanvasProps {
@@ -74,6 +75,7 @@ const PolicyNode = memo(function PolicyNode({ data }: NodeProps<CanvasNode>) {
   // The trunk runs down the page; the router turns the flow to the right, along the lanes.
   const inTrunk = node.lane === null && node.kind !== "outcome";
   const off = tally?.off.length ?? 0;
+  const notRun = tally?.notRun ?? 0;
 
   let eyebrow: string | null = null;
   let title: string;
@@ -104,8 +106,8 @@ const PolicyNode = memo(function PolicyNode({ data }: NodeProps<CanvasNode>) {
     case "evaluator":
       eyebrow = copy.canvas.evaluator;
       title = node.evaluator;
-      detail = node.model;
-      tag = { text: copy.canvas.minConfidence(node.minConfidence), tone: "escalate" };
+      detail = copy.canvas.evaluatorDetail(formatConfidence(node.minConfidence));
+      tag = { text: copy.canvas.evaluatorFail, tone: "escalate" };
       break;
     case "outcome":
       title = copy.outcome[node.outcome];
@@ -138,6 +140,10 @@ const PolicyNode = memo(function PolicyNode({ data }: NodeProps<CanvasNode>) {
         {!status && off > 0 ? (
           <span className="wl-node-count" title={copy.canvas.failing(off)}>
             {copy.canvas.count(off)}
+          </span>
+        ) : !status && notRun > 0 ? (
+          <span className="wl-node-count wl-node-count-idle" title={copy.canvas.notRunHint(notRun)}>
+            {copy.canvas.notRun(notRun)}
           </span>
         ) : null}
       </div>
@@ -223,7 +229,7 @@ const FlowEdgeView = memo(function FlowEdgeView({
             className="wl-add nodrag nopan"
             style={{ transform: `translate(-50%, -50%) translate(${add.x}px, ${add.y}px)` }}
             aria-label={data.add.category === null ? copy.canvas.addAlways : copy.canvas.addTo(data.add.category)}
-            title={copy.canvas.addGate}
+            title={data.add.category === null ? copy.canvas.addGate : copy.canvas.addNode}
             onClick={() => data.add && data.onAdd(data.add)}
           >
             <IconPlus size={13} aria-hidden="true" />

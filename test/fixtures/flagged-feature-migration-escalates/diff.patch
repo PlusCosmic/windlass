@@ -1,0 +1,45 @@
+diff --git a/api/Clips/ClipEndpoints.cs b/api/Clips/ClipEndpoints.cs
+index f9f7463..f8f01c4 100644
+--- a/api/Clips/ClipEndpoints.cs
++++ b/api/Clips/ClipEndpoints.cs
+@@ -8,5 +8,8 @@ public static class ClipEndpoints
+         app.MapPost("/api/clips/search", ClipHandlers.Search)
+             .RequireAuthorization()
+             .RequireFeature(FeatureFlagKeys.ClipSearch);
++        app.MapPost("/api/clips/{id}/reactions", ClipHandlers.React)
++            .RequireAuthorization()
++            .RequireFeature(FeatureFlagKeys.ClipReactions);
+     }
+ }
+diff --git a/api/FeatureFlags/FeatureFlagKeys.cs b/api/FeatureFlags/FeatureFlagKeys.cs
+index c7548e7..8cc27e1 100644
+--- a/api/FeatureFlags/FeatureFlagKeys.cs
++++ b/api/FeatureFlags/FeatureFlagKeys.cs
+@@ -3,6 +3,7 @@ namespace Api.FeatureFlags;
+ public static class FeatureFlagKeys
+ {
+     public const string ClipSearch = "clip_search";
++    public const string ClipReactions = "clip_reactions";
+ 
+-    public static readonly string[] All = [ClipSearch];
++    public static readonly string[] All = [ClipSearch, ClipReactions];
+ }
+diff --git a/frontend/src/routes/clips.tsx b/frontend/src/routes/clips.tsx
+index 8094a79..aeb7304 100644
+--- a/frontend/src/routes/clips.tsx
++++ b/frontend/src/routes/clips.tsx
+@@ -2,5 +2,6 @@ import { useFeature } from "../shared/services/featureFlags";
+ 
+ export function ClipsPage() {
+   const search = useFeature("clip_search");
+-  return <main>{search ? <SearchBox /> : null}</main>;
++  const reactions = useFeature("clip_reactions");
++  return <main>{search ? <SearchBox /> : null}{reactions ? <Reactions /> : null}</main>;
+ }
+diff --git a/migrations/V2__clip_reactions.sql b/migrations/V2__clip_reactions.sql
+new file mode 100644
+index 0000000..b1d32eb
+--- /dev/null
++++ b/migrations/V2__clip_reactions.sql
+@@ -0,0 +1 @@
++create table clip_reaction (clip_id uuid not null, emoji text not null);

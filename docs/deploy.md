@@ -1,6 +1,6 @@
 # Deploying the Windlass App
 
-The App is one container: a Node server that receives GitHub webhooks, keeps its state in a SQLite file, and serves the policy editor. It deploys like the other apps: merging to `master` builds `ghcr.io/pluscosmic/windlass:sha-<commit>` and opens an image bump PR against `PlusCosmic/infrastructure` (`.github/workflows/publish-image.yml`); merging that PR is what Dokploy deploys.
+The App is one container: a Node server that receives GitHub webhooks, keeps its state in a SQLite file, and serves the policy editor. A second container from the same image, the runner, answers the policy's evaluators (section 5); without it everything else works and evaluator lanes escalate. It deploys like the other apps: merging to `master` builds `ghcr.io/pluscosmic/windlass:sha-<commit>` and opens an image bump PR against `PlusCosmic/infrastructure` (`.github/workflows/publish-image.yml`); merging that PR is what Dokploy deploys.
 
 It runs in shadow mode. It comments, labels and reports a check run; it never merges.
 
@@ -49,7 +49,7 @@ Everything is environment variables; the server refuses to start if any is missi
 | `GITHUB_CLIENT_ID`        | the App's client ID                                                                 |
 | `GITHUB_CLIENT_SECRET`    | the App's client secret                                                             |
 
-Optional: `PORT` (8080), `WINDLASS_DATA_DIR` (`/data`), `WINDLASS_POLICY_PATH` (`.windlass/policy.yaml`).
+Optional: `PORT` (8080), `WINDLASS_DATA_DIR` (`/data`), `WINDLASS_POLICY_PATH` (`.windlass/policy.yaml`), and `WINDLASS_RUNNER_TOKEN` to let a runner connect (section 5).
 
 ## 3. The compose file
 
@@ -96,6 +96,54 @@ Install the App on a repository (App settings → Install App). The repo appears
 
 A repo judged by the App should not also run the Action: remove its `.github/workflows/windlass.yml`, or both will comment and fight over the labels. `ci_green` needs no `ignore` for the App's own check; the App never counts its own check runs.
 
+## 5. The evaluator runner
+
+Evaluators ask a model a question about a PR's diff. Windlass never calls the model itself: the runner does, with a credential only it holds, and it holds nothing of GitHub's. It makes outbound requests only (to the App for questions, and to the model), so it needs no route or volume.
+
+1. Make a token for the runner to sign in to the App with, and give the same value to both services as `WINDLASS_RUNNER_TOKEN` (32+ characters, `openssl rand -hex 32`).
+2. Give the runner a model credential. For a Claude subscription, run `claude setup-token` on a machine with a browser and set the token it prints as `CLAUDE_CODE_OAUTH_TOKEN`; it lasts a year. An API key works too, as `ANTHROPIC_API_KEY`.
+3. Add the runner to the compose file, and put the App on the stack's own network so the runner can reach it by name:
+
+```yaml
+services:
+  windlass:
+    # ...as above, plus:
+    environment:
+      - WINDLASS_RUNNER_TOKEN=${WINDLASS_RUNNER_TOKEN:?Set WINDLASS_RUNNER_TOKEN}
+    networks:
+      - default
+      - media-stack
+
+  # Answers the policy's evaluators. Holds the model credential and no GitHub one.
+  windlass-runner:
+    image: "ghcr.io/pluscosmic/windlass:sha-<commit>"
+    container_name: windlass-runner
+    command: ["node", "--enable-source-maps", "server.mjs", "runner"]
+    environment:
+      - WINDLASS_APP_URL=http://windlass:8080
+      - WINDLASS_RUNNER_TOKEN=${WINDLASS_RUNNER_TOKEN:?Set WINDLASS_RUNNER_TOKEN}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:?Set CLAUDE_CODE_OAUTH_TOKEN (from claude setup-token)}
+    # The image's health check asks the App's HTTP port, which the runner doesn't have.
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    networks:
+      - default
+```
+
+| Variable                  | Value                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `WINDLASS_APP_URL`        | where the App is; `http://windlass:8080` on the compose network                                            |
+| `WINDLASS_RUNNER_TOKEN`   | the same token the App has                                                                                 |
+| `CLAUDE_CODE_OAUTH_TOKEN` | a Claude subscription token from `claude setup-token`; or set `ANTHROPIC_API_KEY`                          |
+| `WINDLASS_RUNNER_MODELS`  | optional: the models it will run, the default first (`claude-opus-5-5,claude-sonnet-5-5,claude-haiku-5-5`) |
+
+The runner refuses to start if it is given the App's secrets, and runs a model only if it is in its list, whatever a policy asks for. It works through questions one at a time. On a subscription it shares the plan's usage limits with everything else on that plan: when a limit is hit, evaluators escalate with "the runner could not ask the model" until it resets.
+
+`docker run --rm ghcr.io/pluscosmic/windlass:sha-<commit> node server.mjs runner --check` asks one trivial question and prints the answer, or why there was none.
+
+Anyone else running Windlass would run a runner of their own with their own credential. A subscription's terms don't allow a hosted service to use it on someone else's behalf, which is why the credential lives in the runner and not in the App.
+
 ## Running it locally
 
 ```sh
@@ -107,6 +155,14 @@ Dev mode has no sign-in and no webhooks, listens only on loopback, and never wri
 
 ```sh
 GITHUB_TOKEN=$(gh auth token) WINDLASS_DEV=1 node app/dist/server.mjs import PlusCosmic/reelshelf 40
+```
+
+To have evaluators answered locally, give the dev server a runner token and start a runner beside it. With no `CLAUDE_CODE_OAUTH_TOKEN` set it uses this machine's own Claude Code sign-in:
+
+```sh
+export WINDLASS_RUNNER_TOKEN=$(openssl rand -hex 32)
+WINDLASS_DEV=1 node app/dist/server.mjs &
+WINDLASS_APP_URL=http://127.0.0.1:8080 node app/dist/server.mjs runner
 ```
 
 While working on the editor itself, `bun run dev:web` serves it with hot reload and proxies the API to the server above.

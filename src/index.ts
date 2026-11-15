@@ -9,7 +9,20 @@ export {
   type EvaluatorStatus,
   type GateRecord,
 } from "./decision.js";
+export { evaluatorPreset, evaluatorPresets, type EvaluatorPreset } from "./evaluators/presets.js";
+export { buildEvaluatorPrompt, PROMPT_VERSION, VERDICT_JSON_SCHEMA } from "./evaluators/prompt.js";
+export { NOT_RUN_NO_RUNNER, NOT_RUN_WAITING } from "./evaluators/reasons.js";
 export {
+  isQuestionPlaceholder,
+  MAX_QUESTION_LENGTH,
+  QUESTION_PLACEHOLDERS,
+  questionPlaceholders,
+  resolveQuestion,
+  type QuestionPlaceholder,
+  type ResolvedQuestion,
+} from "./evaluators/question.js";
+export {
+  EvaluatorNotRun,
   VerdictSchema,
   type EvaluatorRequest,
   type EvaluatorResponse,
@@ -21,6 +34,8 @@ export { diffStats, parseDiff } from "./facts/diff.js";
 export type * from "./facts/types.js";
 export { ciGreen } from "./gates/ci-green.js";
 export { noNewSkips, SKIP_MARKERS, type SkipMarker } from "./gates/no-new-skips.js";
+export { flagReferenced } from "./gates/flag-referenced.js";
+export { pathsNone } from "./gates/paths-none.js";
 export { pathsOnly } from "./gates/paths-only.js";
 export { builtinGates, defaultGateRegistry, GateRegistry } from "./gates/registry.js";
 export {
@@ -42,6 +57,7 @@ export {
   ROUTER_NODE,
   START_NODE,
   traceDecision,
+  type EvaluatorRef,
   type FlowEdge,
   type FlowGraph,
   type FlowNode,

@@ -30,7 +30,11 @@ export interface BuiltinRecord {
   reason: string;
 }
 
-export type EvaluatorStatus = "pass" | "fail" | "low_confidence" | "error" | "skipped";
+/**
+ * `not_run` is an evaluator nobody has asked yet (a replay that only reads stored
+ * verdicts, or no runner connected). Like `error`, it escalates.
+ */
+export type EvaluatorStatus = "pass" | "fail" | "low_confidence" | "error" | "not_run" | "skipped";
 
 export interface EvaluatorRecord {
   node: string;

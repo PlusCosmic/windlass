@@ -1,5 +1,7 @@
 import { ciGreen } from "./ci-green.js";
+import { flagReferenced } from "./flag-referenced.js";
 import { noNewSkips } from "./no-new-skips.js";
+import { pathsNone } from "./paths-none.js";
 import { pathsOnly } from "./paths-only.js";
 import type { GateDefinition } from "./types.js";
 
@@ -25,7 +27,7 @@ export class GateRegistry {
   }
 }
 
-export const builtinGates = [pathsOnly, ciGreen, noNewSkips] as const;
+export const builtinGates = [pathsOnly, pathsNone, ciGreen, noNewSkips, flagReferenced] as const;
 
 /** A registry with every built-in gate. */
 export function defaultGateRegistry(): GateRegistry {

@@ -2,10 +2,12 @@ import { Button, EmptyState, Field, Input, Notice, SegmentedControl, Select } fr
 import { useState } from "react";
 import { laneEnd, type FlowGraph, type FlowNode } from "../../src/graph";
 import { readGate, type PolicyEdit } from "../../src/policy/edit";
-import type { GateInfo, SimulatedPull } from "./api";
+import type { EvaluatorCatalog, GateInfo, RunnerStatus, SimulatedPull } from "./api";
 import { ArgsForm } from "./ArgsForm";
 import type { AddTarget } from "./Canvas";
 import { copy } from "./copy/app";
+import { AddEvaluator, EvaluatorInspector } from "./EvaluatorInspector";
+import { Problems } from "./Problems";
 import { countOutcomes, undefinedCategories, type Replay } from "./trace";
 
 type GateNode = Extract<FlowNode, { kind: "gate" }>;
@@ -17,13 +19,23 @@ interface InspectorProps {
   adding: AddTarget | null;
   source: string;
   gates: GateInfo[];
+  /** The built-in questions an evaluator can ask, and what a question can refer to. */
+  evaluators: EvaluatorCatalog;
+  runner: RunnerStatus;
   replay: Replay;
   pulls: SimulatedPull[];
+  selectedPull: number | null;
+  /** Whether the draft is a valid policy. */
+  valid: boolean;
+  /** A request to run the evaluators is on its way. */
+  running: boolean;
   /** Makes the change, reporting a failure itself. True when it was made. */
   apply: (edit: PolicyEdit) => boolean;
   onSelectNode: (id: string | null) => void;
   onSelectPull: (number: number) => void;
   onCancelAdd: () => void;
+  /** Asks the runner about every stored pull request with no answer under the draft. */
+  onRunEvaluators: () => void;
 }
 
 const FAIL_OUTCOMES = ["escalate", "block"] as const;
@@ -36,19 +48,6 @@ function gateId(category: string | null, index: number, gate: string): string {
 
 function gateCount(graph: FlowGraph, category: string | null): number {
   return graph.nodes.filter((node) => node.kind === "gate" && node.ref.category === category).length;
-}
-
-function Problems({ errors }: { errors: string[] }) {
-  if (errors.length === 0) return null;
-  return (
-    <Notice tone="error" title={copy.inspector.errors} compact>
-      <ul className="wl-plain-list">
-        {errors.map((error, i) => (
-          <li key={i}>{error}</li>
-        ))}
-      </ul>
-    </Notice>
-  );
 }
 
 /** The pull requests a node took off the merge path, as links that select them. */
@@ -102,9 +101,11 @@ function Summary({ pulls }: { pulls: SimulatedPull[] }) {
   );
 }
 
-function AddGate({
+/** What the "+" offers: a gate, or in a category's lane an evaluator to ask once its gates have passed. */
+function AddNode({
   target,
   gates,
+  evaluators,
   graph,
   apply,
   onSelectNode,
@@ -112,41 +113,72 @@ function AddGate({
 }: {
   target: AddTarget;
   gates: GateInfo[];
+  evaluators: EvaluatorCatalog;
   graph: FlowGraph;
   apply: InspectorProps["apply"];
   onSelectNode: InspectorProps["onSelectNode"];
   onCancel: () => void;
 }) {
+  const [kind, setKind] = useState<"gate" | "evaluator">("gate");
+  const { category } = target;
+  const evaluator = category !== null && kind === "evaluator";
+
   return (
     <div className="wl-inspector">
       <header>
-        <h2 className="wl-heading">{copy.inspector.add.title}</h2>
+        <h2 className="wl-heading">{evaluator ? copy.inspector.add.evaluatorTitle : copy.inspector.add.title}</h2>
         <p className="wl-muted">
-          {target.category === null ? copy.inspector.add.always : copy.inspector.add.category(target.category)}
+          {category === null
+            ? copy.inspector.add.always
+            : evaluator
+              ? copy.inspector.add.evaluator(category)
+              : copy.inspector.add.category(category)}
         </p>
       </header>
-      <div className="wl-gate-choices">
-        {gates.map((gate) => (
-          <button
-            key={gate.name}
-            type="button"
-            className="wl-gate-choice"
-            onClick={() => {
-              const index = gateCount(graph, target.category);
-              // Added without arguments: a gate that needs some shows what's missing, and the draft stays invalid until they're given.
-              if (apply({ type: "add_gate", category: target.category, gate: gate.name })) {
-                onSelectNode(gateId(target.category, index, gate.name));
-              }
-            }}
-          >
-            <span className="wl-gate-choice-name">{gate.name}</span>
-            <span className="wl-gate-choice-detail">{gate.description}</span>
-            <span className={`wl-node-tag wl-tag-${gate.defaultOnFail}`}>
-              {copy.inspector.add.defaultFail(gate.defaultOnFail)}
-            </span>
-          </button>
-        ))}
-      </div>
+      {category !== null ? (
+        <SegmentedControl
+          className="wl-kind"
+          aria-label={copy.inspector.add.kind.label}
+          value={kind}
+          options={[
+            { value: "gate", label: copy.inspector.add.kind.gate },
+            { value: "evaluator", label: copy.inspector.add.kind.evaluator },
+          ]}
+          onChange={setKind}
+        />
+      ) : null}
+      {category !== null && evaluator ? (
+        <AddEvaluator
+          category={category}
+          graph={graph}
+          catalog={evaluators}
+          apply={apply}
+          onSelectNode={onSelectNode}
+        />
+      ) : (
+        <div className="wl-gate-choices">
+          {gates.map((gate) => (
+            <button
+              key={gate.name}
+              type="button"
+              className="wl-gate-choice"
+              onClick={() => {
+                const index = gateCount(graph, category);
+                // Added without arguments: a gate that needs some shows what's missing, and the draft stays invalid until they're given.
+                if (apply({ type: "add_gate", category, gate: gate.name })) {
+                  onSelectNode(gateId(category, index, gate.name));
+                }
+              }}
+            >
+              <span className="wl-gate-choice-name">{gate.name}</span>
+              <span className="wl-gate-choice-detail">{gate.description}</span>
+              <span className={`wl-node-tag wl-tag-${gate.defaultOnFail}`}>
+                {copy.inspector.add.defaultFail(gate.defaultOnFail)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div>
         <Button variant="ghost" onClick={onCancel}>
           {copy.inspector.add.cancel}
@@ -365,9 +397,12 @@ export function Inspector(props: InspectorProps) {
 
   if (adding) {
     return (
-      <AddGate
+      <AddNode
+        // Each "+" starts from the gates again.
+        key={adding.category ?? ""}
         target={adding}
         gates={gates}
+        evaluators={props.evaluators}
         graph={graph}
         apply={apply}
         onSelectNode={onSelectNode}
@@ -418,23 +453,21 @@ export function Inspector(props: InspectorProps) {
       );
     case "evaluator":
       return (
-        <div className="wl-inspector">
-          <header>
-            <p className="ui-eyebrow">{copy.canvas.evaluator}</p>
-            <h2 className="wl-heading wl-code">{node.evaluator}</h2>
-            <p className="wl-muted">{copy.inspector.evaluator.body}</p>
-          </header>
-          <Problems errors={node.errors} />
-          <Notice tone="warning" compact>
-            {copy.inspector.evaluator.noRunner}
-          </Notice>
-          <dl className="wl-facts">
-            <dt>{copy.inspector.evaluator.model}</dt>
-            <dd className="wl-code">{node.model ?? copy.inspector.evaluator.modelDefault}</dd>
-            <dt>{copy.canvas.minConfidence(node.minConfidence)}</dt>
-            <dd />
-          </dl>
-        </div>
+        <EvaluatorInspector
+          key={node.id}
+          node={node}
+          source={props.source}
+          catalog={props.evaluators}
+          runner={props.runner}
+          pulls={pulls}
+          selectedPull={props.selectedPull}
+          valid={props.valid}
+          running={props.running}
+          apply={apply}
+          onSelectNode={onSelectNode}
+          onSelectPull={onSelectPull}
+          onRun={props.onRunEvaluators}
+        />
       );
   }
 }

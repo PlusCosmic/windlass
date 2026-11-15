@@ -1,4 +1,4 @@
-# Default policy for fixtures: phase 1 (gates only).
+# Default policy for fixtures: the gate-only lanes, and one lane that ends in an evaluator.
 policy: v1
 defaults:
   always:
@@ -15,6 +15,15 @@ categories:
   test_only:
     gates:
       - paths_only: ["**/test/**", "**/tests/**", "**/*.test.ts", "**/*_test.go"]
+    outcome: merge
+
+  flagged_feature:
+    gates:
+      - flag_referenced
+      - paths_none: ["migrations/**"]
+    evaluators:
+      - id: fully_flag_gated
+        min_confidence: 0.85
     outcome: merge
 
 fallback: escalate

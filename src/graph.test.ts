@@ -20,6 +20,7 @@ categories:
       - paths_only: ["**/*.md"]
     evaluators:
       - id: docs_are_accurate
+        question: Do the docs describe what the code does?
         min_confidence: 0.8
     outcome: merge
   refactor:

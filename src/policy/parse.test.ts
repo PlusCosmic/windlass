@@ -25,6 +25,7 @@ categories:
       - paths_only: ["**/*.md"]
     evaluators:
       - id: docs_are_accurate
+        question: Do the docs describe what the code does?
         min_confidence: 0.8
         model: claude-haiku-5-5
     outcome: merge
@@ -46,6 +47,8 @@ categories:
       {
         id: "docs_only.eval[0]:docs_are_accurate",
         evaluator: "docs_are_accurate",
+        question: "Do the docs describe what the code does?",
+        questionFromPreset: false,
         minConfidence: 0.8,
         model: "claude-haiku-5-5",
       },
@@ -113,5 +116,48 @@ categories:
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.map((e) => `${e.path} ${e.message}`).join("\n")).toMatch(pattern);
+  });
+
+  describe("evaluators", () => {
+    const withEvaluator = (entry: string) =>
+      parsePolicy(
+        `policy: v1\ncategories:\n  flagged_feature:\n    evaluators:\n${entry}\n    outcome: merge\n`,
+        registry,
+      );
+
+    it("uses the built-in question when a built-in evaluator writes none", () => {
+      const result = withEvaluator("      - id: fully_flag_gated\n        min_confidence: 0.85");
+      if (!result.ok) throw new Error(JSON.stringify(result.errors));
+      expect(result.policy.categories.flagged_feature?.evaluators[0]).toMatchObject({
+        questionFromPreset: true,
+        question: expect.stringContaining("{{flag}}"),
+      });
+    });
+
+    it("lets a policy ask its own question under any name", () => {
+      const result = withEvaluator(
+        "      - id: fully_flag_gated\n        question: Is it behind {{flag}}?\n        min_confidence: 0.85",
+      );
+      if (!result.ok) throw new Error(JSON.stringify(result.errors));
+      expect(result.policy.categories.flagged_feature?.evaluators[0]).toMatchObject({
+        questionFromPreset: false,
+        question: "Is it behind {{flag}}?",
+      });
+    });
+
+    it("rejects an evaluator with nothing to ask, and unknown placeholders", () => {
+      expect(withEvaluator("      - id: looks_fine\n        min_confidence: 0.5")).toMatchObject({
+        ok: false,
+        errors: [{ path: "categories.flagged_feature.evaluators[0]" }],
+      });
+      expect(
+        withEvaluator("      - id: looks_fine\n        question: Does {{branch}} match?\n        min_confidence: 0.5"),
+      ).toMatchObject({
+        ok: false,
+        errors: [
+          { path: "categories.flagged_feature.evaluators[0].question", message: "unknown placeholder `{{branch}}`" },
+        ],
+      });
+    });
   });
 });

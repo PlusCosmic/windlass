@@ -1,19 +1,66 @@
 import { serve } from "@hono/node-server";
 import { appAccess, tokenAccess } from "./access.js";
-import { loadConfig } from "./config.js";
+import { claudeBackend } from "./claude-backend.js";
+import { loadConfig, loadRunnerConfig } from "./config.js";
+import { Evaluations, hashRunnerToken } from "./evaluations.js";
 import { seedFixtures } from "./fixtures.js";
 import { GitHubApp } from "./github-app.js";
 import { createHttpApp } from "./http.js";
 import { KeyedQueue } from "./queue.js";
+import { runRunner } from "./runner.js";
 import { Service } from "./service.js";
 import { Store } from "./store.js";
 import { handleWebhook } from "./webhooks.js";
 
 const log = (message: string) => console.log(`${new Date().toISOString()} ${message}`);
 
+/** The name of the runner whose token comes from the App's own environment. */
+const CONFIGURED_RUNNER = "default";
+
+/**
+ * `runner`: the evaluator runner, a separate process from the App. It holds the model credential, takes
+ * questions from the App and answers them. `runner --check` asks one trivial question and exits, to show
+ * that the CLI it depends on starts in this image.
+ */
+async function runner(): Promise<void> {
+  const backend = claudeBackend();
+  if (process.argv[3] === "--check") {
+    const result = await backend.ask(
+      {
+        id: "check",
+        model: process.env.WINDLASS_RUNNER_MODELS?.split(",")[0]?.trim() || "claude-haiku-5-5",
+        system: "Answer with the structured output only.",
+        user: "Is 2 + 2 equal to 4?",
+        schema: { type: "object", required: ["answer"], properties: { answer: { type: "boolean" } } },
+      },
+      AbortSignal.timeout(120_000),
+    );
+    // Signed out still shows the CLI runs, which is what an image build can check.
+    const ran = result.ok || result.kind === "unavailable";
+    console.log(result.ok ? `ok: ${result.model} answered` : `${result.kind}: ${result.message}`);
+    process.exit(ran ? 0 : 1);
+  }
+
+  const config = loadRunnerConfig();
+  const stop = new AbortController();
+  process.once("SIGTERM", () => stop.abort());
+  process.once("SIGINT", () => stop.abort());
+  log(`Windlass runner (${backend.name}: ${config.models.join(", ")}) taking work from ${config.appUrl}`);
+  await runRunner({ config, backend, log }, stop.signal);
+}
+
 async function main(): Promise<void> {
+  if (process.argv[2] === "runner") return runner();
+
   const config = loadConfig();
   const store = new Store(config.dataDir);
+
+  // The runner's token is in this process's environment only so it can be recognised; a runner
+  // that is no longer configured stops being one.
+  // Dev mode keeps the queue even without a runner, so the fixtures' stored verdicts show.
+  const evaluations = config.runnerToken || config.mode === "dev" ? new Evaluations({ store }) : null;
+  if (config.runnerToken) store.upsertRunner(CONFIGURED_RUNNER, hashRunnerToken(config.runnerToken), null);
+  else store.removeRunner(CONFIGURED_RUNNER);
   const queue = new KeyedQueue((key, error) => {
     log(`could not judge ${key}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
   });
@@ -23,6 +70,7 @@ async function main(): Promise<void> {
     store,
     github: github ? appAccess(github) : tokenAccess(config.mode === "dev" ? config.githubToken : null),
     policyPath: config.policyPath,
+    ...(evaluations && { evaluations }),
     ...(config.mode === "app" && { baseUrl: config.baseUrl }),
   });
 
@@ -38,7 +86,7 @@ async function main(): Promise<void> {
   }
 
   if (config.mode === "dev") {
-    const seeded = seedFixtures(store, process.env.WINDLASS_FIXTURES_DIR ?? "test/fixtures");
+    const seeded = await seedFixtures(store, process.env.WINDLASS_FIXTURES_DIR ?? "test/fixtures", evaluations);
     log(`dev mode: no sign-in, no webhooks, loopback only (${seeded} fixture PRs loaded)`);
   }
 
@@ -60,6 +108,7 @@ async function main(): Promise<void> {
     store,
     service,
     log,
+    ...(evaluations && { evaluations }),
     ...(github && {
       onWebhook: (event: string, payload: unknown) =>
         handleWebhook(
@@ -72,6 +121,11 @@ async function main(): Promise<void> {
 
   const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
     log(`Windlass (${config.mode}) listening on http://${info.address}:${info.port}`);
+    log(
+      config.runnerToken
+        ? "evaluators: waiting for a runner"
+        : "evaluators: no WINDLASS_RUNNER_TOKEN, so none will run",
+    );
   });
 
   const stop = () => {

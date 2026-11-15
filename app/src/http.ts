@@ -6,6 +6,7 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import type { Config } from "./config.js";
+import { hashRunnerToken, type Evaluations } from "./evaluations.js";
 import { verifyWebhookSignature } from "./github-app.js";
 import { ServiceError, type Service } from "./service.js";
 import { createSession, readSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from "./session.js";
@@ -15,6 +16,8 @@ export interface HttpDeps {
   config: Config;
   store: Store;
   service: Service;
+  /** Present when a runner token is configured: the queue runners take evaluation jobs from. */
+  evaluations?: Evaluations;
   /** Handles a verified webhook; absent in dev mode, which receives none. */
   onWebhook?: (event: string, payload: unknown) => Promise<string>;
   fetch?: typeof fetch;
@@ -29,6 +32,21 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SimulateBody = z.object({ policy: z.string().max(200_000).nullable() });
 const ProposeBody = z.object({ policy: z.string().min(1).max(200_000) });
 const ImportBody = z.object({ limit: z.number().int().min(1).max(100).default(30) });
+
+const ClaimBody = z.object({
+  models: z.array(z.string().min(1).max(100)).max(20).default([]),
+  /** Seconds to wait for a job before answering that there is none. */
+  wait: z.number().min(0).max(50).default(25),
+});
+const JobResultBody = z.union([
+  z.object({
+    ok: z.literal(true),
+    model: z.string().min(1).max(100),
+    output: z.unknown(),
+    durationMs: z.number().int().nonnegative().optional(),
+  }),
+  z.object({ ok: z.literal(false), kind: z.enum(["unavailable", "error"]), message: z.string().max(2000) }),
+]);
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -65,6 +83,42 @@ export function createHttpApp(deps: HttpDeps): Hono<Env> {
   }
 
   app.get("/health", (c) => c.json({ ok: true }));
+
+  // Runners: a bearer token, never a session. A runner can take evaluation jobs (a diff and a question,
+  // with nothing that names the repo) and answer them, and can do nothing else here.
+  const { evaluations } = deps;
+  if (evaluations) {
+    const runnerOf = (c: Context<Env>) => {
+      const header = c.req.header("authorization") ?? "";
+      const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+      return token ? store.findRunnerByTokenHash(hashRunnerToken(token)) : null;
+    };
+
+    app.post("/runner/v1/claim", bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
+      const runner = runnerOf(c);
+      if (!runner) return c.json({ error: "unknown runner token" }, 401);
+      const { models, wait } = ClaimBody.parse(await c.req.json().catch(() => ({})));
+      const job = await evaluations.claim(runner, models, wait * 1000);
+      return job ? c.json({ job }) : c.body(null, 204);
+    });
+
+    app.post("/runner/v1/jobs/:id", bodyLimit({ maxSize: 1024 * 1024 }), async (c) => {
+      const runner = runnerOf(c);
+      if (!runner) return c.json({ error: "unknown runner token" }, 401);
+      const result = JobResultBody.parse(await c.req.json());
+      const taken = evaluations.complete(
+        runner,
+        c.req.param("id"),
+        result.ok
+          ? { ok: true, model: result.model, output: result.output, durationMs: result.durationMs }
+          : { ok: false, kind: result.kind, message: result.message },
+      );
+      if (!taken) return c.json({ error: "that job is not this runner's to answer" }, 409);
+      if (!result.ok) log(`runner ${runner.name} could not answer a job (${result.kind}): ${result.message}`);
+      return c.json({ ok: true });
+    });
+  }
+  app.all("/runner/*", (c) => c.json({ error: "not found" }, 404));
 
   if (config.mode === "app") {
     const { github, baseUrl, sessionSecret, admins } = config;
@@ -155,7 +209,13 @@ export function createHttpApp(deps: HttpDeps): Hono<Env> {
   });
 
   app.get("/api/me", (c) =>
-    c.json({ login: c.get("login"), mode: config.mode, policyPath: config.policyPath, gates: service.catalog() }),
+    c.json({
+      login: c.get("login"),
+      mode: config.mode,
+      policyPath: config.policyPath,
+      gates: service.catalog(),
+      evaluators: service.evaluatorCatalog(),
+    }),
   );
 
   app.get("/api/repos", (c) =>
@@ -179,6 +239,14 @@ export function createHttpApp(deps: HttpDeps): Hono<Env> {
     const repo = repoOf(c);
     const { policy } = SimulateBody.parse(await c.req.json());
     return c.json({ source: repo.policySource, ...(await service.simulate(repo, policy)) });
+  });
+
+  app.post("/api/repos/:owner/:name/evaluate", async (c) => {
+    const repo = repoOf(c);
+    const { policy } = SimulateBody.parse(await c.req.json());
+    const { queued } = await service.evaluateStored(repo, policy);
+    log(`${c.get("login")} queued ${queued} evaluation(s) for ${repo.owner}/${repo.name}`);
+    return c.json({ queued });
   });
 
   app.post("/api/repos/:owner/:name/import", async (c) => {

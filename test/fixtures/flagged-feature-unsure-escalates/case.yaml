@@ -1,0 +1,19 @@
+description: A pass the evaluator isn't sure of escalates
+body: |
+  ```windlass
+  category: flagged_feature
+  flag: clip_reactions
+  ```
+ci:
+  - name: build
+    conclusion: success
+verdicts:
+  fully_flag_gated:
+    verdict: pass
+    confidence: 0.6
+    evidence: []
+expect:
+  outcome: escalate
+  reasons: ["confidence 0.6 is below 0.85"]
+  evaluators:
+    flagged_feature.eval[0]:fully_flag_gated: low_confidence

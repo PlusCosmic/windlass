@@ -7,6 +7,8 @@ export interface NodeTally {
   /** Took the PR off the merge path here: a failure, an error or an unsure evaluator. */
   off: number[];
   pending: number;
+  /** Reached an evaluator nobody has an answer from. It escalates, but says nothing about the pull request. */
+  notRun: number;
 }
 
 export interface Replay {
@@ -30,10 +32,11 @@ export function replay(graph: FlowGraph, pulls: readonly SimulatedPull[]): Repla
     traces.set(pull.number, trace);
     for (const [id, status] of Object.entries(trace.nodes)) {
       if (status === "skipped") continue;
-      const tally = (nodes[id] ??= { reached: 0, off: [], pending: 0 });
+      const tally = (nodes[id] ??= { reached: 0, off: [], pending: 0, notRun: 0 });
       tally.reached++;
       if (OFF_PATH.has(status)) tally.off.push(pull.number);
       if (status === "pending") tally.pending++;
+      if (status === "not_run") tally.notRun++;
     }
     for (const id of trace.edges) edges[id] = (edges[id] ?? 0) + 1;
   }

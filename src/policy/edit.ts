@@ -1,5 +1,5 @@
-import { isMap, isScalar, isSeq, parseDocument, type Document, type YAMLMap, type YAMLSeq } from "yaml";
-import type { GateRef } from "../graph.js";
+import { isMap, isScalar, isSeq, parseDocument, type Document, type Scalar, type YAMLMap, type YAMLSeq } from "yaml";
+import type { EvaluatorRef, GateRef } from "../graph.js";
 import type { FailOutcome, Outcome } from "./types.js";
 
 /**
@@ -13,6 +13,17 @@ export type PolicyEdit =
   | { type: "move_gate"; at: GateRef; to: GateRef }
   | { type: "set_gate_args"; at: GateRef; args: unknown }
   | { type: "set_on_fail"; at: GateRef; onFail: FailOutcome | null }
+  | { type: "add_evaluator"; category: string; id: string; question?: string; minConfidence: number; model?: string }
+  | { type: "remove_evaluator"; at: EvaluatorRef }
+  /** `question: null` leaves it to the built-in question; `model: null` to the runner's default. */
+  | {
+      type: "set_evaluator";
+      at: EvaluatorRef;
+      id?: string;
+      question?: string | null;
+      minConfidence?: number;
+      model?: string | null;
+    }
   | { type: "add_category"; name: string }
   | { type: "rename_category"; from: string; to: string }
   | { type: "remove_category"; name: string }
@@ -61,6 +72,35 @@ export function applyEdit(source: string, edit: PolicyEdit): string {
     case "set_on_fail":
       setGateKey(doc, edit.at, "on_fail", edit.onFail ?? undefined);
       break;
+    case "add_evaluator": {
+      requireName(edit.id, "an evaluator name");
+      const list = evaluatorList(doc, edit.category, true);
+      const entry = doc.createNode({ id: edit.id, min_confidence: edit.minConfidence }) as YAMLMap;
+      if (edit.question !== undefined) setQuestion(doc, entry, edit.question);
+      if (edit.model !== undefined) entry.set("model", edit.model);
+      insert(list, list.items.length, entry);
+      break;
+    }
+    case "remove_evaluator": {
+      const list = evaluatorList(doc, edit.at.category, false);
+      requireEvaluator(list, edit.at);
+      list.items.splice(edit.at.index, 1);
+      break;
+    }
+    case "set_evaluator": {
+      const list = evaluatorList(doc, edit.at.category, false);
+      const entry = requireEvaluator(list, edit.at);
+      if (edit.id !== undefined) {
+        requireName(edit.id, "an evaluator name");
+        entry.set("id", edit.id);
+      }
+      if (edit.question === null) entry.delete("question");
+      else if (edit.question !== undefined) setQuestion(doc, entry, edit.question);
+      if (edit.minConfidence !== undefined) entry.set("min_confidence", edit.minConfidence);
+      if (edit.model === null) entry.delete("model");
+      else if (edit.model !== undefined) entry.set("model", edit.model);
+      break;
+    }
     case "add_category": {
       requireCategoryName(edit.name);
       if (doc.hasIn(["categories", edit.name])) throw new Error(`category \`${edit.name}\` already exists`);
@@ -116,6 +156,40 @@ function gateList(doc: Document, category: string | null, create: boolean): YAML
   return list;
 }
 
+function evaluatorList(doc: Document, category: string, create: boolean): YAMLSeq {
+  if (!doc.hasIn(["categories", category])) throw new Error(`category \`${category}\` is not in the policy`);
+  const path = ["categories", category, "evaluators"];
+  const existing = doc.getIn(path);
+  if (isSeq(existing)) return existing;
+  if (existing !== undefined && existing !== null) throw new Error(`\`${path.join(".")}\` is not a list`);
+  if (!create) throw new Error(`\`${path.join(".")}\` has no evaluators`);
+  const list = doc.createNode([]) as YAMLSeq;
+  // Before `outcome`, where the engine runs them: gates, evaluators, then the lane's end.
+  const map = doc.getIn(["categories", category]);
+  if (isMap(map)) {
+    const at = map.items.findIndex((pair) => isScalar(pair.key) && pair.key.value === "outcome");
+    const pair = doc.createPair("evaluators", list);
+    if (at >= 0) map.items.splice(at, 0, pair);
+    else map.items.push(pair);
+  } else {
+    doc.setIn(path, list);
+  }
+  return list;
+}
+
+function requireEvaluator(list: YAMLSeq, ref: EvaluatorRef): YAMLMap {
+  const item = Number.isInteger(ref.index) ? list.items[ref.index] : undefined;
+  if (!isMap(item)) throw new Error(`no evaluator at categories.${ref.category}.evaluators[${ref.index}]`);
+  return item;
+}
+
+/** A question is prose, so it is written as a block (`question: |`) and reads as one in the file. */
+function setQuestion(doc: Document, entry: YAMLMap, question: string): void {
+  const node = doc.createNode(question.trim() + "\n") as Scalar;
+  node.type = "BLOCK_LITERAL";
+  entry.set("question", node);
+}
+
 function insert(list: YAMLSeq, index: number, item: unknown): void {
   // An empty list is written `[]`; its first gate goes on a line of its own, like the rest of the file.
   if (list.items.length === 0) list.flow = false;
@@ -162,7 +236,11 @@ function setGateKey(doc: Document, ref: GateRef, key: "with" | "on_fail", value:
 }
 
 function requireCategoryName(name: string): void {
-  if (!CATEGORY_NAME.test(name)) throw new Error("a category name must be snake_case, starting with a letter");
+  requireName(name, "a category name");
+}
+
+function requireName(name: string, what: string): void {
+  if (!CATEGORY_NAME.test(name)) throw new Error(`${what} must be snake_case, starting with a letter`);
 }
 
 function clamp(value: number, min: number, max: number): number {

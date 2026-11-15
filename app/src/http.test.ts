@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, readPrivateKey, type Config } from "./config.js";
 import { appJwt, verifyWebhookSignature } from "./github-app.js";
+import { Evaluations, hashRunnerToken } from "./evaluations.js";
 import { createHttpApp } from "./http.js";
 import { Service } from "./service.js";
 import { createSession, readSession, SESSION_COOKIE } from "./session.js";
@@ -38,17 +39,27 @@ let store: Store;
 let github: FakeGitHub;
 let webhooks: [string, unknown][];
 
+const RUNNER_TOKEN = "r".repeat(40);
+
 function build(config: Config, fetchImpl?: typeof fetch) {
   store = new Store(":memory:");
   github = new FakeGitHub().add(pull(1));
   webhooks = [];
-  const service = new Service({ store, github: accessTo(github), policyPath: config.policyPath });
+  const evaluations = config.runnerToken ? new Evaluations({ store }) : undefined;
+  if (config.runnerToken) store.upsertRunner("default", hashRunnerToken(config.runnerToken), null);
+  const service = new Service({
+    store,
+    github: accessTo(github),
+    policyPath: config.policyPath,
+    ...(evaluations && { evaluations }),
+  });
   const repo = store.upsertRepo("acme", "app", 5);
   store.setPolicySource(repo.id, POLICY);
   return createHttpApp({
     config,
     store,
     service,
+    ...(evaluations && { evaluations }),
     onWebhook: async (event, payload) => {
       webhooks.push([event, payload]);
       return "ok";
@@ -218,6 +229,83 @@ describe("the deployed App", () => {
     expect(await (await app.request("/anything/else")).text()).toContain("<title>Windlass</title>");
     expect(await (await app.request("/..%2Fsecret.html")).text()).not.toBe("nope");
     expect(await (await app.request("/%2e%2e/secret.html")).text()).not.toBe("nope");
+  });
+});
+
+describe("the runner's door", () => {
+  const FLAGGED = `policy: v1
+categories:
+  flagged_feature:
+    evaluators:
+      - id: fully_flag_gated
+        min_confidence: 0.8
+    outcome: merge
+`;
+  const asRunner = { authorization: `Bearer ${RUNNER_TOKEN}`, "content-type": "application/json" };
+  let app: ReturnType<typeof build>;
+  beforeEach(() => {
+    app = build(loadConfig({ ...appEnv, WINDLASS_RUNNER_TOKEN: RUNNER_TOKEN }));
+  });
+  const claim = (headers: Record<string, string>) =>
+    app.request("/runner/v1/claim", { method: "POST", body: JSON.stringify({ models: ["m"], wait: 0 }), headers });
+
+  it("opens only to the runner token, and a runner gets nowhere else", async () => {
+    expect((await claim({ "content-type": "application/json" })).status).toBe(401);
+    expect((await claim({ ...asRunner, authorization: `Bearer ${"x".repeat(40)}` })).status).toBe(401);
+    expect((await claim(asRunner)).status).toBe(204);
+    expect((await app.request("/api/repos", { headers: asRunner })).status).toBe(401);
+    expect((await app.request("/runner/v1/anything", { headers: asRunner })).status).toBe(404);
+  });
+
+  it("is shut when no runner token is configured", async () => {
+    const closed = build(loadConfig(appEnv));
+    const response = await closed.request("/runner/v1/claim", { method: "POST", body: "{}", headers: asRunner });
+    expect(response.status).toBe(404);
+  });
+
+  it("queues questions from the editor, hands them to the runner and takes its answers", async () => {
+    const repo = store.getRepo("acme", "app")!;
+    store.setPolicySource(repo.id, FLAGGED);
+    store.savePull({
+      repoId: repo.id,
+      number: 1,
+      title: "PR 1",
+      author: "agent",
+      state: "open",
+      headSha: "h",
+      input: {
+        baseSha: "b",
+        headSha: "h",
+        body: "```windlass\ncategory: flagged_feature\nflag: clip_search\n```",
+        diff: ["--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-a", "+b"].join("\n"),
+      },
+      decision: null,
+      updatedAt: new Date(0).toISOString(),
+    });
+    const post = (path: string, body: unknown) =>
+      app.request(path, { method: "POST", body: JSON.stringify(body), headers: { ...signedIn, ...json } });
+
+    expect((await post("/api/repos/acme/app/evaluate", { policy: null })).status).toBe(409); // no runner yet
+    await claim(asRunner);
+    expect(await (await post("/api/repos/acme/app/evaluate", { policy: null })).json()).toEqual({ queued: 1 });
+
+    const { job } = (await (await claim(asRunner)).json()) as { job: { id: string; user: string } };
+    expect(job.user).toContain("clip_search");
+    const answer = (id: string, body: unknown, headers: Record<string, string> = asRunner) =>
+      app.request(`/runner/v1/jobs/${id}`, { method: "POST", body: JSON.stringify(body), headers });
+    const output = { verdict: "pass", confidence: 0.9, evidence: [] };
+    expect((await answer("nope", { ok: true, model: "m", output })).status).toBe(409);
+    expect(
+      (await answer(job.id, { ok: true, model: "m", output }, { "content-type": "application/json" })).status,
+    ).toBe(401);
+    expect((await answer(job.id, { ok: true, model: "m", output })).status).toBe(200);
+
+    const simulated = (await (await post("/api/repos/acme/app/simulate", { policy: null })).json()) as {
+      pulls: { draft: { outcome: string } }[];
+      evaluators: unknown;
+    };
+    expect(simulated.pulls[0]!.draft.outcome).toBe("merge");
+    expect(simulated.evaluators).toEqual({ online: true, models: ["m"], queued: 0 });
   });
 });
 

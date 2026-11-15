@@ -8,7 +8,14 @@ import {
   type EvaluatorRecord,
   type GateRecord,
 } from "./decision.js";
-import { VerdictSchema, type EvaluatorRunner } from "./evaluators/types.js";
+import { resolveQuestion } from "./evaluators/question.js";
+import {
+  EvaluatorNotRun,
+  MAX_EVIDENCE,
+  MAX_EVIDENCE_DETAIL,
+  VerdictSchema,
+  type EvaluatorRunner,
+} from "./evaluators/types.js";
 import { globMatcher, touchedPaths } from "./gates/paths.js";
 import { defaultGateRegistry, type GateRegistry } from "./gates/registry.js";
 import type { GateResult } from "./gates/types.js";
@@ -228,8 +235,15 @@ async function runEvaluator(
   };
   if (!options.evaluators) return { ...base, reason: "no evaluator runner is configured" };
 
+  const question = resolveQuestion(node.question, intent);
+  if (!question.ok) {
+    const names = question.missing.map((name) => `\`${name}\``).join(", ");
+    return { ...base, reason: `the question needs ${names}, which the PR did not declare` };
+  }
+
   const request = {
     evaluator: node.evaluator,
+    question: question.question,
     ...(node.model !== undefined && { model: node.model }),
     headSha: facts.headSha,
     diff: facts.diff,
@@ -261,6 +275,7 @@ async function runEvaluator(
       }),
     ]);
   } catch (error) {
+    if (error instanceof EvaluatorNotRun) return { ...base, status: "not_run", reason: error.message };
     return { ...base, reason: `evaluator failed: ${message(error)}` };
   } finally {
     clearTimeout(timer);
@@ -270,7 +285,20 @@ async function runEvaluator(
   const model = typeof response?.model === "string" ? response.model : base.model;
   if (!parsed.success) return { ...base, model, reason: "evaluator returned malformed output" };
 
-  const { verdict, confidence, evidence } = parsed.data;
+  const { verdict, confidence } = parsed.data;
+  const evidence = parsed.data.evidence
+    .slice(0, MAX_EVIDENCE)
+    .map((item) => ({ ...item, detail: item.detail.slice(0, MAX_EVIDENCE_DETAIL) }));
+
+  // Evidence has to point at the change itself. A verdict that cites files the diff
+  // doesn't touch was not reached by reading the diff, so it isn't one to act on.
+  const changed = new Set(facts.files.flatMap(touchedPaths));
+  const stray = evidence.find((item) => !changed.has(item.file));
+  if (stray) return { ...base, model, reason: "evaluator cited a file the diff does not change" };
+  if (verdict === "fail" && evidence.length === 0) {
+    return { ...base, model, reason: "evaluator failed the PR without evidence" };
+  }
+
   const result = { ...base, model, verdict, confidence, evidence };
   if (confidence < node.minConfidence) {
     return {

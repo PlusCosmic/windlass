@@ -31,5 +31,11 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: windlass:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The runner depends on a native CLI installed in the image. With no credential it can only
+      # report that it is signed out, which still shows the CLI starts on this image's platform.
+      - name: The runner's CLI starts in the image
+        run: docker run --rm windlass:ci node server.mjs runner --check

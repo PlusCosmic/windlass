@@ -21,7 +21,11 @@ const IntentSchema = z.object({
     .union([z.number().int().positive(), z.string().regex(/^#?\d+$/)])
     .transform((v) => (typeof v === "number" ? v : Number(v.replace("#", ""))))
     .optional(),
-  flag: z.string().min(1).optional(),
+  // A key, not prose: it is put into evaluator questions, and the PR body is attacker-controlled.
+  flag: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,79}$/, "must be a flag key (letters, digits and _ . : / -)")
+    .optional(),
 });
 
 // An opening fence of ``` or ~~~ whose info string is exactly `windlass`.

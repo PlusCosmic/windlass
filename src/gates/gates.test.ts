@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { diffStats } from "../facts/diff.js";
 import type { ChangedFile, CheckRun, Facts } from "../facts/types.js";
 import { ciGreen } from "./ci-green.js";
+import { flagReferenced } from "./flag-referenced.js";
 import { noNewSkips } from "./no-new-skips.js";
+import { pathsNone } from "./paths-none.js";
 import { pathsOnly } from "./paths-only.js";
 
 function file(
@@ -207,6 +209,61 @@ describe("no_new_skips", () => {
     });
     expect(run([file("vendor/x.ts", ["// eslint-disable"])], { ignore_paths: ["vendor/**"] })).toMatchObject({
       status: "pass",
+    });
+  });
+});
+
+describe("paths_none", () => {
+  const run = (files: ChangedFile[], args: string[]) => pathsNone.run({ facts: facts(files), intent: null, args });
+
+  it("passes when nothing matches", () => {
+    expect(run([file("api/Clips.cs"), file("frontend/src/a.tsx")], ["migrations/**"])).toMatchObject({
+      status: "pass",
+    });
+  });
+
+  it("fails on a match and names the files", () => {
+    expect(run([file("api/Clips.cs"), file("migrations/V64__flags.sql")], ["migrations/**", "**/*.sql"])).toEqual({
+      status: "fail",
+      reason: "1 changed path(s) match migrations/**, **/*.sql",
+      evidence: [{ file: "migrations/V64__flags.sql", detail: "matches a path this category must not change" }],
+    });
+  });
+
+  it("counts the old side of a rename, so a file can't be moved out of a protected path", () => {
+    const moved = file("archive/V1.sql", [], [], { status: "renamed", previousPath: "migrations/V1.sql" });
+    expect(run([moved], ["migrations/**"])).toMatchObject({ status: "fail" });
+  });
+});
+
+describe("flag_referenced", () => {
+  const run = (files: ChangedFile[], flag?: string) =>
+    flagReferenced.run({
+      facts: facts(files),
+      intent: { category: "flagged_feature", ...(flag !== undefined && { flag }) },
+      args: undefined,
+    });
+
+  it("passes when an added line names the flag", () => {
+    const files = [file("README.md", ["docs"]), file("api/Clips.cs", ["x", '.RequireFeature("clip_search")'])];
+    expect(run(files, "clip_search")).toEqual({
+      status: "pass",
+      reason: "flag `clip_search` is referenced in api/Clips.cs",
+      evidence: [{ file: "api/Clips.cs", line: 2, detail: "references the declared flag" }],
+    });
+  });
+
+  it("fails when only a removed line names it, or none does", () => {
+    expect(run([file("api/Clips.cs", ["x"], ['RequireFeature("clip_search")'])], "clip_search")).toMatchObject({
+      status: "fail",
+      reason: "no added line references the flag `clip_search`",
+    });
+  });
+
+  it("fails when the PR declares no flag, and errors without an intent", () => {
+    expect(run([file("api/Clips.cs", ["clip_search"])])).toMatchObject({ status: "fail" });
+    expect(flagReferenced.run({ facts: facts([]), intent: null, args: undefined })).toMatchObject({
+      status: "error",
     });
   });
 });

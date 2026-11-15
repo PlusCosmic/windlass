@@ -17,6 +17,11 @@ interface CommonConfig {
   /** The built editor (`web/dist`). */
   webDir: string;
   policyPath: string;
+  /**
+   * The token the evaluator runner signs in with; null when there is no runner, and
+   * evaluators then escalate. It only lets its holder take evaluation jobs and answer them.
+   */
+  runnerToken: string | null;
 }
 
 /**
@@ -62,6 +67,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dataDir: resolve(env.WINDLASS_DATA_DIR ?? ".data"),
     webDir: resolve(env.WINDLASS_WEB_DIR ?? "web/dist"),
     policyPath: env.WINDLASS_POLICY_PATH || ".windlass/policy.yaml",
+    runnerToken: readRunnerToken(env),
   };
 
   if (env.WINDLASS_DEV === "1") {
@@ -97,6 +103,53 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientSecret: env.GITHUB_CLIENT_SECRET!,
     },
   };
+}
+
+const MIN_RUNNER_TOKEN = 32;
+
+function readRunnerToken(env: NodeJS.ProcessEnv): string | null {
+  const token = env.WINDLASS_RUNNER_TOKEN;
+  if (!token) return null;
+  if (token.length < MIN_RUNNER_TOKEN) {
+    throw new Error(`WINDLASS_RUNNER_TOKEN must be at least ${MIN_RUNNER_TOKEN} characters`);
+  }
+  return token;
+}
+
+/** The evaluator runner: a second process that holds a model credential and no GitHub one. */
+export interface RunnerConfig {
+  /** Where the App is, e.g. `http://windlass:8080` on the compose network. */
+  appUrl: string;
+  token: string;
+  /** Models it offers, the default first. */
+  models: string[];
+}
+
+export const DEFAULT_RUNNER_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
+
+/**
+ * Reads the runner's configuration. It refuses to start with GitHub App
+ * credentials in its environment: the point of the runner is that the process
+ * reading untrusted diffs with a model holds nothing but the model credential.
+ */
+export function loadRunnerConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
+  const leaked = [
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_CLIENT_SECRET",
+    "WINDLASS_SESSION_SECRET",
+  ].filter((name) => env[name]);
+  if (leaked.length > 0) throw new Error(`the runner must not be given ${leaked.join(", ")}`);
+
+  const token = readRunnerToken(env);
+  if (!token) throw new Error("missing WINDLASS_RUNNER_TOKEN");
+  if (!env.WINDLASS_APP_URL) throw new Error("missing WINDLASS_APP_URL (where the Windlass App is)");
+  const appUrl = new URL(env.WINDLASS_APP_URL);
+  const models = (env.WINDLASS_RUNNER_MODELS ?? "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  return { appUrl: appUrl.origin, token, models: models.length > 0 ? models : DEFAULT_RUNNER_MODELS };
 }
 
 /** Accepts the PEM as it is, with its newlines written as `\n`, or base64-encoded (the easiest to paste into an env tab). */
