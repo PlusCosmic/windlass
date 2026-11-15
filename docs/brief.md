@@ -99,6 +99,8 @@ The bugfix gates are the key trick: run the PR's new or changed test against the
 
 v1 is a GitHub Action plus a small engine library — no server, no database, no UI. Language: TypeScript (Node, Octokit). Keep the engine independent of the Action wrapper so it can later run as a GitHub App or CLI, and export the policy types for the future React Flow editor.
 
+**Revised Nov 15, 2026:** v1 is now a GitHub App with the flowchart editor, brought forward from phase 4; the Action stays as the adapter that needs nothing hosted. The first week of shadow mode showed why: every PR escalated on a category the policy didn't define, and tuning that needs a way to replay real PRs against a draft policy. An App is also what phase 2 needs, since a merge made with the Action's `GITHUB_TOKEN` starts no workflows (main's CI, the post-merge watch) and the Action's workflow file is one a PR can edit. The engine rules are unchanged, and the policy file in the repo is still the source of truth: the editor saves by opening a PR, which escalates like any other change under `.windlass/`.
+
 Flow per PR event:
 
 1. Action triggers on `pull_request` (opened, synchronize) and on CI completion.
@@ -127,7 +129,7 @@ Each phase ships something usable and gates the next on real evidence.
 
 **Metrics to track from day one:** share of agent PRs auto-merged; auto-merged PRs later reverted or needing a follow-up fix (the number that decides whether to loosen or tighten rules); escalation rate per category and per node.
 
-**Non-goals for v1:** visual editor, multi-repo or multi-user support, GitLab, hosted service, billing.
+**Non-goals for v1:** multi-user support, GitLab, a hosted service for others, billing. (The visual editor was one until the Nov 15 revision above.)
 
 **Decisions:**
 

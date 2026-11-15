@@ -2,9 +2,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { renderComment } from "./comment.js";
-import { OctokitPort } from "./octokit.js";
-import { evaluatePullRequest, resolvePullRequests, type EventPayload, type PullRequestResult } from "./run.js";
+import { renderComment } from "../../github/comment.js";
+import { OctokitPort } from "../../github/octokit.js";
+import {
+  evaluatePullRequest,
+  resolvePullRequests,
+  type EventPayload,
+  type PullRequestResult,
+} from "../../github/run.js";
 
 async function main(): Promise<void> {
   const mode = core.getInput("mode") || "shadow";

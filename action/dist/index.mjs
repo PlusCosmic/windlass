@@ -21714,10 +21714,10 @@ var require_identity = __commonJS({
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
     var isAlias = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === ALIAS;
     var isDocument = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === DOC;
-    var isMap = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === MAP;
+    var isMap2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === MAP;
     var isPair = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === PAIR;
-    var isScalar = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SCALAR;
-    var isSeq = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
+    var isScalar2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SCALAR;
+    var isSeq2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
     function isCollection(node2) {
       if (node2 && typeof node2 === "object")
         switch (node2[NODE_TYPE]) {
@@ -21738,7 +21738,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node2) => (isScalar(node2) || isCollection(node2)) && !!node2.anchor;
+    var hasAnchor = (node2) => (isScalar2(node2) || isCollection(node2)) && !!node2.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -21750,11 +21750,11 @@ var require_identity = __commonJS({
     exports.isAlias = isAlias;
     exports.isCollection = isCollection;
     exports.isDocument = isDocument;
-    exports.isMap = isMap;
+    exports.isMap = isMap2;
     exports.isNode = isNode;
     exports.isPair = isPair;
-    exports.isScalar = isScalar;
-    exports.isSeq = isSeq;
+    exports.isScalar = isScalar2;
+    exports.isSeq = isSeq2;
   }
 });
 
@@ -25862,9 +25862,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap = fc.start.source === "{";
-      const fcName = isMap ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap2 = fc.start.source === "{";
+      const fcName = isMap2 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap2 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -25900,7 +25900,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap && ctx.options.strict && utilContainsNewline.containsNewline(key))
+          if (!isMap2 && ctx.options.strict && utilContainsNewline.containsNewline(key))
             onError(
               key,
               // checked by containsNewline()
@@ -25940,7 +25940,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep2 && !props.found) {
+        if (!isMap2 && !sep2 && !props.found) {
           const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep2, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -25963,7 +25963,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap && !props.found && ctx.options.strict) {
+            if (!isMap2 && !props.found && ctx.options.strict) {
               if (sep2)
                 for (const st of sep2) {
                   if (st === valueProps.found)
@@ -25995,7 +25995,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap) {
+          if (isMap2) {
             const map2 = coll;
             if (utilMapIncludes.mapIncludes(ctx, map2.items, keyNode))
               onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
@@ -26011,7 +26011,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap ? "}" : "]";
+      const expectedEnd = isMap2 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -27298,7 +27298,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR = "";
     var isCollection = (token) => !!token && "items" in token;
-    var isScalar = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar2 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -27382,7 +27382,7 @@ var require_cst = __commonJS({
     exports.FLOW_END = FLOW_END;
     exports.SCALAR = SCALAR;
     exports.isCollection = isCollection;
-    exports.isScalar = isScalar;
+    exports.isScalar = isScalar2;
     exports.prettyToken = prettyToken;
     exports.tokenType = tokenType;
   }
@@ -28912,7 +28912,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument(source, options = {}) {
+    function parseDocument2(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -28938,7 +28938,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument(src, options);
+      const doc = parseDocument2(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -28974,7 +28974,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse5;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument;
+    exports.parseDocument = parseDocument2;
     exports.stringify = stringify;
   }
 });
@@ -33707,7 +33707,7 @@ function getOctokit(token, options, ...additionalPlugins) {
   return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 
-// action/src/comment.ts
+// github/comment.ts
 var COMMENT_MARKER = "<!-- windlass:decision";
 var MAX_COMMENT_LENGTH = 6e4;
 var MAX_EVIDENCE_PER_NODE = 10;
@@ -33820,7 +33820,7 @@ function longestRun(value, ch) {
   return longest;
 }
 
-// action/src/octokit.ts
+// github/octokit.ts
 var OctokitPort = class {
   constructor(octokit, options) {
     this.octokit = octokit;
@@ -33837,6 +33837,9 @@ var OctokitPort = class {
       number: data.number,
       state: data.state === "open" ? "open" : "closed",
       draft: data.draft ?? false,
+      merged: data.merged,
+      title: data.title,
+      author: data.user?.login ?? "",
       body: data.body ?? "",
       baseRef: data.base.ref,
       baseSha: data.base.sha,
@@ -33871,15 +33874,16 @@ var OctokitPort = class {
     return data;
   }
   async getChecks(sha) {
-    const ignored = new Set(this.options.ignoreChecks);
-    const ownRun = `/actions/runs/${this.options.runId}/`;
+    const ignored = new Set(this.options.ignoreChecks ?? []);
+    const ignoredApps = new Set(this.options.ignoreApps ?? []);
+    const ownRun = this.options.runId === void 0 ? null : `/actions/runs/${this.options.runId}/`;
     const runs = await this.octokit.paginate(this.octokit.rest.checks.listForRef, {
       ...this.repo,
       ref: sha,
       filter: "latest",
       per_page: 100
     });
-    const checks = runs.filter((run) => !ignored.has(run.name) && !(run.details_url ?? "").includes(ownRun)).map((run) => ({
+    const checks = runs.filter((run) => !ignored.has(run.name) && !ignoredApps.has(run.app?.slug ?? "")).filter((run) => ownRun === null || !(run.details_url ?? "").includes(ownRun)).map((run) => ({
       name: run.name,
       status: run.status === "completed" ? "completed" : run.status === "queued" ? "queued" : "in_progress",
       conclusion: run.conclusion ?? null
@@ -33937,7 +33941,7 @@ function status(error63) {
   return typeof error63 === "object" && error63 !== null && "status" in error63 && typeof error63.status === "number" ? error63.status : void 0;
 }
 
-// action/src/run.ts
+// github/run.ts
 import { createHash as createHash2 } from "node:crypto";
 
 // src/facts/diff.ts
@@ -54207,17 +54211,14 @@ function parsePolicy(source, registry2) {
       outcome: category.outcome
     };
   }
-  if (errors.length > 0) return { ok: false, hash: hash2, errors };
-  return {
-    ok: true,
-    hash: hash2,
-    policy: {
-      version: data.policy,
-      defaults: { always, onEvaluatorError: data.defaults.on_evaluator_error },
-      categories,
-      fallback: data.fallback
-    }
+  const policy = {
+    version: data.policy,
+    defaults: { always, onEvaluatorError: data.defaults.on_evaluator_error },
+    categories,
+    fallback: data.fallback
   };
+  if (errors.length > 0) return { ok: false, hash: hash2, errors, partial: policy };
+  return { ok: true, hash: hash2, policy };
 }
 function normalizeGate(entry, path, id, registry2, errors) {
   let name;
@@ -54299,6 +54300,7 @@ async function decide(input2, options) {
     path: ["policy"],
     category: null,
     intent,
+    builtins: [],
     gates: [],
     evaluators: [],
     changes: null,
@@ -54316,10 +54318,15 @@ async function decide(input2, options) {
     record2.outcome = contributions.length === 0 ? "escalate" : mostSevere(contributions);
     return record2;
   };
+  const builtin = (node2, failure2) => {
+    record2.builtins.push({ node: node2, status: failure2 === null ? "pass" : "fail", reason: failure2 ?? "" });
+    contribute(failure2 === null ? "merge" : "escalate", failure2 ?? "");
+  };
   if (!loaded.ok) {
-    contribute("escalate", `policy is invalid (${loaded.errors.length} error(s))`);
+    builtin("policy", `policy is invalid (${loaded.errors.length} error(s))`);
     return finish();
   }
+  builtin("policy", null);
   const { policy } = loaded;
   let facts;
   try {
@@ -54336,12 +54343,12 @@ async function decide(input2, options) {
   record2.path.push("protected_paths");
   const isProtected = globMatcher(PROTECTED_PATHS);
   const protectedTouched = facts.files.flatMap(touchedPaths).filter(isProtected);
-  contribute(
-    protectedTouched.length > 0 ? "escalate" : "merge",
-    `changes Windlass policy files: ${protectedTouched.join(", ")}`
+  builtin(
+    "protected_paths",
+    protectedTouched.length > 0 ? `changes Windlass policy files: ${protectedTouched.join(", ")}` : null
   );
   record2.path.push("intent");
-  if (!parsedIntent.ok) contribute("escalate", `intent: ${parsedIntent.reason}`);
+  builtin("intent", parsedIntent.ok ? null : `intent: ${parsedIntent.reason}`);
   for (const node2 of policy.defaults.always) {
     record2.path.push(node2.id);
     const gate = await runGate(node2, "always", facts, intent, registry2);
@@ -54496,27 +54503,41 @@ function message(error63) {
   return error63 instanceof Error ? error63.message : String(error63);
 }
 
-// action/src/run.ts
+// src/policy/edit.ts
+var import_yaml3 = __toESM(require_dist(), 1);
+
+// github/run.ts
 var LABEL_PREFIX = "windlass/";
 var OUTCOME_LABELS = {
   merge: `${LABEL_PREFIX}would-merge`,
   escalate: `${LABEL_PREFIX}escalate`,
   block: `${LABEL_PREFIX}block`
 };
-async function evaluatePullRequest(github, number4, config2) {
+async function snapshotPullRequest(github, number4, config2) {
   const pr = await github.getPullRequest(number4);
-  if (pr.state !== "open") return { status: "skipped", number: number4, reason: "the pull request is closed" };
-  if (pr.draft) return { status: "skipped", number: number4, reason: "the pull request is a draft" };
   const policySource = await github.getFile(config2.policyPath, pr.baseRef);
   const [diff, checks] = await Promise.all([github.getDiff(number4), github.getChecks(pr.headSha)]);
+  return {
+    pr,
+    policySource,
+    input: { baseSha: pr.baseSha, headSha: pr.headSha, body: pr.body, diff, ci: { checks } }
+  };
+}
+function decideSnapshot(snapshot, config2, policy) {
+  return decide(snapshot.input, {
+    policy: policy ?? snapshot.policySource ?? missingPolicy(config2.policyPath, snapshot.pr.baseRef)
+  });
+}
+async function evaluatePullRequest(github, number4, config2) {
+  const snapshot = await snapshotPullRequest(github, number4, config2);
+  const { pr } = snapshot;
+  if (pr.state !== "open") return { status: "skipped", number: number4, reason: "the pull request is closed" };
+  if (pr.draft) return { status: "skipped", number: number4, reason: "the pull request is a draft" };
   const current = await github.getPullRequest(number4);
   if (current.headSha !== pr.headSha) {
     return { status: "skipped", number: number4, reason: `the head moved to ${current.headSha} during evaluation` };
   }
-  const decision = await decide(
-    { baseSha: pr.baseSha, headSha: pr.headSha, body: pr.body, diff, ci: { checks } },
-    { policy: policySource ?? missingPolicy(config2.policyPath, pr.baseRef) }
-  );
+  const decision = await decideSnapshot(snapshot, config2);
   const existing = await github.findComment(number4);
   if (decision.outcome === "pending") {
     await setOutcomeLabel(github, number4, null);
@@ -54524,13 +54545,13 @@ async function evaluatePullRequest(github, number4, config2) {
     if (existing && previousSha !== pr.headSha) {
       await github.updateComment(existing.id, renderWaiting(pr.headSha, previousSha));
     }
-    return { status: "pending", number: number4, decision };
+    return { status: "pending", number: number4, decision, snapshot };
   }
   const body = renderComment(decision);
   if (existing) await github.updateComment(existing.id, body);
   else await github.createComment(number4, body);
   await setOutcomeLabel(github, number4, OUTCOME_LABELS[decision.outcome]);
-  return { status: "decided", number: number4, decision };
+  return { status: "decided", number: number4, decision, snapshot };
 }
 async function setOutcomeLabel(github, number4, label) {
   const labels = await github.getLabels(number4);

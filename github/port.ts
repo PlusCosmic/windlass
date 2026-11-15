@@ -1,9 +1,13 @@
-import type { CheckRun } from "../../src/index.js";
+import type { CheckRun } from "../src/index.js";
 
 export interface PullRequestData {
   number: number;
   state: "open" | "closed";
   draft: boolean;
+  merged: boolean;
+  /** Shown in the Windlass UI. Like the body, never given to the engine or an evaluator. */
+  title: string;
+  author: string;
   /** The PR description; only the `windlass` block is ever read from it. */
   body: string;
   baseRef: string;
@@ -16,7 +20,7 @@ export interface Comment {
   body: string;
 }
 
-/** Everything the Action needs from GitHub, so the logic can be tested without it. */
+/** Everything Windlass needs from GitHub for one repository, so the logic can be tested without it. */
 export interface GitHubPort {
   getPullRequest(number: number): Promise<PullRequestData>;
   /** Open PRs whose head is `sha`. */

@@ -2,6 +2,7 @@ import { collectFacts } from "./facts/collect.js";
 import type { Facts, PullRequestInput } from "./facts/types.js";
 import {
   mostSevere,
+  type BuiltinRecord,
   type DecisionOutcome,
   type DecisionRecord,
   type EvaluatorRecord,
@@ -65,6 +66,7 @@ export async function decide(input: PullRequestInput, options: DecideOptions): P
     path: ["policy"],
     category: null,
     intent,
+    builtins: [],
     gates: [],
     evaluators: [],
     changes: null,
@@ -83,10 +85,16 @@ export async function decide(input: PullRequestInput, options: DecideOptions): P
     return record;
   };
 
+  const builtin = (node: BuiltinRecord["node"], failure: string | null) => {
+    record.builtins.push({ node, status: failure === null ? "pass" : "fail", reason: failure ?? "" });
+    contribute(failure === null ? "merge" : "escalate", failure ?? "");
+  };
+
   if (!loaded.ok) {
-    contribute("escalate", `policy is invalid (${loaded.errors.length} error(s))`);
+    builtin("policy", `policy is invalid (${loaded.errors.length} error(s))`);
     return finish();
   }
+  builtin("policy", null);
   const { policy } = loaded;
 
   let facts: Facts;
@@ -105,13 +113,13 @@ export async function decide(input: PullRequestInput, options: DecideOptions): P
   record.path.push("protected_paths");
   const isProtected = globMatcher(PROTECTED_PATHS);
   const protectedTouched = facts.files.flatMap(touchedPaths).filter(isProtected);
-  contribute(
-    protectedTouched.length > 0 ? "escalate" : "merge",
-    `changes Windlass policy files: ${protectedTouched.join(", ")}`,
+  builtin(
+    "protected_paths",
+    protectedTouched.length > 0 ? `changes Windlass policy files: ${protectedTouched.join(", ")}` : null,
   );
 
   record.path.push("intent");
-  if (!parsedIntent.ok) contribute("escalate", `intent: ${parsedIntent.reason}`);
+  builtin("intent", parsedIntent.ok ? null : `intent: ${parsedIntent.reason}`);
 
   for (const node of policy.defaults.always) {
     record.path.push(node.id);

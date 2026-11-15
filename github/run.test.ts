@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CheckRun } from "../../src/index.js";
+import type { CheckRun } from "../src/index.js";
 import { COMMENT_MARKER, commentSha } from "./comment.js";
 import type { Comment, GitHubPort, PullRequestData } from "./port.js";
 import { evaluatePullRequest, resolvePullRequests } from "./run.js";
@@ -24,6 +24,9 @@ class FakeGitHub implements GitHubPort {
     number: 7,
     state: "open",
     draft: false,
+    merged: false,
+    title: "Update the README",
+    author: "agent",
     body: "```windlass\ncategory: docs_only\n```",
     baseRef: "main",
     baseSha: "a".repeat(40),

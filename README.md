@@ -2,7 +2,11 @@
 
 A policy engine that decides, for each agent-authored pull request, whether to **merge**, **escalate** to a human, or **block**. It combines deterministic gates with narrowly scoped LLM evaluators and fails closed. See [`docs/brief.md`](docs/brief.md) for the design.
 
-This is phase 1 of the brief: the engine library (policy parser and validator, diff fact collector, the `paths_only`, `ci_green` and `no_new_skips` gates, the graph walker, the decision record and a fixture harness) and a GitHub Action that runs it in shadow mode. It makes no LLM calls yet.
+This is phase 1 of the brief, in shadow mode: nothing is merged, and no LLM calls are made yet.
+
+- The **engine library** (`src/`): policy parser and validator, diff fact collector, the `paths_only`, `ci_green` and `no_new_skips` gates, the graph walker, the decision record and a fixture harness.
+- A **GitHub App** (`app/`, `web/`): judges PRs as webhooks arrive, keeps what it saw, and serves a flowchart editor that replays those PRs under a draft policy. See [The App and the editor](#the-app-and-the-editor).
+- A **GitHub Action** (`action/`): the same judging with nothing to host, and no editor.
 
 ## How a PR is decided
 
@@ -72,6 +76,21 @@ It never merges. While CI is still running the decision is `pending`: nothing ne
 
 The Action runs from the committed bundle in `action/dist/`; `bun run build:action` regenerates it and CI fails if it's out of date.
 
+## The App and the editor
+
+The App does what the Action does (the comment and the label), reports a `Windlass` check run, and remembers each PR it judges: its diff, CI checks and `windlass` block. Being an App, it is told when CI finishes instead of needing a `workflow_run` trigger, and the workflow that judges a PR is no longer a file the PR can edit.
+
+The editor draws the policy as the flowchart `decide` walks: the built-in checks and always-gates down the left, then one lane per category. On it you can:
+
+- click a pull request to watch it travel the policy, with each node's result and evidence;
+- add, change, move and remove gates, add categories (it lists the ones PRs declared that the policy lacks), and set outcomes;
+- see, as you edit, how every remembered PR would be decided under the draft against the policy on the default branch;
+- edit the YAML directly; edits on the canvas keep the file's comments.
+
+Saving opens a pull request with the new policy. It is never written to the default branch, and since the PR touches `.windlass/`, Windlass escalates it to a human.
+
+[`docs/deploy.md`](docs/deploy.md) covers registering the App, its configuration, deploying it and running it locally.
+
 ## Fixtures
 
 Each directory in `test/fixtures/` is a sample PR: `case.yaml` (body, CI checks, expected outcome) and `diff.patch`. They run as part of `bun run test`, and `@pluscosmic/windlass/harness` exposes `runFixture` for running them elsewhere.
@@ -80,5 +99,5 @@ Each directory in `test/fixtures/` is a sample PR: `case.yaml` (body, CI checks,
 
 ```sh
 bun install
-bun run check   # typecheck, lint, test, build, format:check
+bun run check   # typecheck, lint, test, the builds, format:check
 ```

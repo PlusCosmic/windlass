@@ -1,6 +1,8 @@
 export { decide, PROTECTED_PATHS, type DecideOptions } from "./engine.js";
 export {
   mostSevere,
+  type BuiltinNode,
+  type BuiltinRecord,
   type DecisionOutcome,
   type DecisionRecord,
   type EvaluatorRecord,
@@ -33,3 +35,18 @@ export { parseIntent, type Intent, type IntentResult } from "./intent.js";
 export { parsePolicy, type LoadedPolicy, type PolicyError, type PolicyResult } from "./policy/parse.js";
 export type * from "./policy/types.js";
 export { ENGINE_VERSION } from "./version.js";
+export {
+  FALLBACK_END,
+  laneEnd,
+  policyToGraph,
+  ROUTER_NODE,
+  START_NODE,
+  traceDecision,
+  type FlowEdge,
+  type FlowGraph,
+  type FlowNode,
+  type GateRef,
+  type Trace,
+  type TraceStatus,
+} from "./graph.js";
+export { applyEdit, readGate, type PolicyEdit } from "./policy/edit.js";

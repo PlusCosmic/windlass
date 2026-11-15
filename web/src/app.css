@@ -1,0 +1,852 @@
+/*
+ * The editor's own styles, on the foundation's tokens. Outcome tones: merge is the accent, escalate the warning,
+ * block the danger, pending the info colour. Classes start `wl-`.
+ */
+
+:root {
+  --wl-merge: var(--accent);
+  --wl-escalate: color-mix(in oklab, var(--warning) 78%, var(--fg));
+  --wl-block: var(--danger);
+  --wl-pending: var(--info);
+  --wl-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.wl-tone-merge {
+  --tone: var(--wl-merge);
+}
+.wl-tone-escalate {
+  --tone: var(--wl-escalate);
+}
+.wl-tone-block {
+  --tone: var(--wl-block);
+}
+.wl-tone-pending {
+  --tone: var(--wl-pending);
+}
+
+/* The editor fills the window under the top bar; its panels scroll, the page doesn't. */
+html {
+  scrollbar-gutter: auto;
+}
+
+.wl-app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+}
+
+.wl-app .ui-main {
+  min-height: 0;
+}
+
+.wl-app .ui-topbar {
+  padding: 10px 16px;
+  gap: 16px;
+}
+
+.wl-repo-select {
+  min-width: 220px;
+}
+
+.wl-editor {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  height: 100%;
+}
+
+.wl-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.wl-side-left {
+  border-right: 1px solid var(--line);
+}
+
+.wl-side-right {
+  border-left: 1px solid var(--line);
+}
+
+.wl-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wl-centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 60vh;
+  padding: 24px;
+}
+
+.wl-muted {
+  margin: 0;
+  color: var(--fg-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wl-code {
+  font-family: var(--wl-mono);
+  font-size: 12px;
+}
+
+.wl-heading {
+  margin: 0 0 4px;
+  font-size: 17px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.wl-heading.wl-code {
+  font-size: 15px;
+}
+
+.wl-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.wl-plain-list {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.wl-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone, var(--track-bg));
+  flex: none;
+}
+
+/* Pull requests */
+
+.wl-pulls {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 0 0;
+}
+
+.wl-pulls > .ui-empty {
+  margin: 0 14px;
+}
+
+.wl-pulls-head {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wl-pulls-head .ui-eyebrow {
+  margin: 0;
+}
+
+.wl-pulls-none {
+  padding: 14px;
+}
+
+.wl-tally {
+  display: flex;
+  gap: 14px;
+}
+
+.wl-tally-item {
+  display: grid;
+  color: var(--fg-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wl-tally-item strong {
+  color: var(--tone);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.wl-pull-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.wl-pull {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  background: none;
+  padding: 10px 14px 10px 11px;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-pull:hover {
+  background: var(--bg-soft);
+}
+
+.wl-pull.wl-selected {
+  border-left-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 9%, var(--surface));
+}
+
+.wl-pull:focus-visible,
+.wl-step-head:focus-visible,
+.wl-gate-choice:focus-visible,
+.wl-add:focus-visible,
+.wl-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.wl-pull-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.wl-pull-number {
+  color: var(--fg-soft);
+  font-weight: 500;
+}
+
+.wl-pull-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--fg-soft);
+  font-size: 12px;
+}
+
+.wl-outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--tone);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wl-was {
+  color: var(--fg-soft);
+  font-size: 11px;
+  text-decoration: line-through;
+}
+
+/* Side panel */
+
+.wl-tabs {
+  margin: 12px 14px 0;
+  align-self: flex-start;
+}
+
+.wl-inspector {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 16px 14px 24px;
+}
+
+.wl-inspector > header .ui-eyebrow {
+  margin: 0 0 4px;
+}
+
+.wl-section {
+  display: grid;
+  gap: 8px;
+}
+
+.wl-section > .ui-eyebrow {
+  margin: 0;
+}
+
+.wl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.wl-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.wl-facts dt {
+  color: var(--fg-soft);
+}
+
+.wl-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wl-summary {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wl-summary th,
+.wl-summary td {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-summary thead th {
+  color: var(--fg-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wl-summary tbody th {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.wl-summary .wl-changed td:last-child {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.wl-pull-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.wl-undefined {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wl-undefined li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.wl-gate-choices {
+  display: grid;
+  gap: 8px;
+}
+
+.wl-gate-choice {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  padding: 10px 12px;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-gate-choice:hover {
+  border-color: var(--accent);
+}
+
+.wl-gate-choice-name {
+  font-family: var(--wl-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wl-gate-choice-detail {
+  color: var(--fg-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.wl-reasons {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.wl-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wl-step {
+  --tone: var(--track-bg);
+  border-left: 3px solid var(--tone);
+  padding-left: 10px;
+}
+
+.wl-step.wl-status-pass {
+  --tone: var(--wl-merge);
+}
+.wl-step.wl-status-fail {
+  --tone: var(--wl-block);
+}
+.wl-step.wl-status-error,
+.wl-step.wl-status-low_confidence {
+  --tone: var(--wl-escalate);
+}
+.wl-step.wl-status-pending {
+  --tone: var(--wl-pending);
+}
+
+.wl-step-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-step-head:disabled {
+  cursor: default;
+}
+
+.wl-step-status {
+  color: var(--tone);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wl-step.wl-status-pass .wl-step-status,
+.wl-step.wl-status-skipped .wl-step-status {
+  color: var(--fg-soft);
+}
+
+.wl-step-reason {
+  margin: 3px 0 0;
+  color: var(--fg-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.wl-evidence {
+  display: grid;
+  gap: 3px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.wl-evidence li {
+  display: grid;
+  overflow-wrap: anywhere;
+}
+
+.wl-evidence-detail {
+  color: var(--fg-soft);
+}
+
+.wl-yaml {
+  flex: 1;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.wl-yaml .ui-field {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.wl-yaml-text {
+  /* As tall as the panel allows: the whole policy is usually on screen. */
+  min-height: max(320px, calc(100vh - 250px));
+  height: 100%;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  resize: none;
+}
+
+/* Canvas */
+
+.wl-canvas .react-flow {
+  --xy-background-color: var(--bg);
+  --xy-background-pattern-color: var(--track-bg);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--bg-soft);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-border-color: var(--line);
+  --xy-attribution-background-color: transparent;
+  font-family: var(--font-sans);
+}
+
+/* Names and "+" buttons sit over every edge, including the raised ones of a traced pull request. */
+.wl-canvas .react-flow__edgelabel-renderer {
+  z-index: 5;
+}
+
+.wl-canvas .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.wl-node {
+  --tone: var(--track-bg);
+  display: grid;
+  grid-template-rows: 14px auto minmax(0, 1fr) auto;
+  align-content: start;
+  justify-items: start;
+  gap: 1px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tone);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 6px 10px 7px;
+  color: var(--fg);
+  cursor: pointer;
+  transition:
+    opacity 120ms,
+    box-shadow 120ms,
+    border-color 120ms;
+}
+
+.wl-node:hover {
+  border-color: var(--track-bg);
+  border-left-color: var(--tone);
+  box-shadow: 0 2px 10px color-mix(in oklab, var(--shadow) 10%, transparent);
+}
+
+.wl-node.wl-selected {
+  border-color: var(--accent);
+  border-left-color: var(--tone);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 45%, transparent);
+}
+
+.wl-node.wl-dimmed {
+  opacity: 0.32;
+}
+
+.wl-dimmed {
+  opacity: 0.4;
+}
+
+.wl-node-start,
+.wl-node-router {
+  background: var(--bg-soft);
+}
+
+.wl-node-start {
+  grid-template-rows: auto auto;
+  align-content: center;
+  cursor: default;
+}
+
+.wl-node-start .wl-node-head {
+  display: none;
+}
+
+/* After .wl-node, which sets the neutral tone, so an outcome's own colour wins. */
+.wl-node.wl-tone-merge {
+  --tone: var(--wl-merge);
+}
+.wl-node.wl-tone-escalate {
+  --tone: var(--wl-escalate);
+}
+.wl-node.wl-tone-block {
+  --tone: var(--wl-block);
+}
+
+.wl-node-outcome {
+  border-color: color-mix(in oklab, var(--tone) 45%, var(--line));
+  border-left-color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 9%, var(--surface));
+}
+
+.wl-node-outcome .wl-node-title {
+  color: var(--tone);
+  font-size: 16px;
+}
+
+.wl-node.wl-invalid {
+  border-color: var(--danger);
+  border-style: dashed;
+  border-left-style: solid;
+  --tone: var(--danger);
+}
+
+.wl-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-height: 14px;
+}
+
+.wl-node-eyebrow {
+  color: var(--fg-soft);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wl-node-status,
+.wl-node-count {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.wl-node-status {
+  background: color-mix(in oklab, var(--tone) 16%, transparent);
+  color: color-mix(in oklab, var(--tone) 80%, var(--fg));
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* How many replayed pull requests this node takes off the merge path. */
+.wl-node-count {
+  background: color-mix(in oklab, var(--wl-escalate) 20%, transparent);
+  color: color-mix(in oklab, var(--wl-escalate) 70%, var(--fg));
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-node-title {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-node-gate .wl-node-title,
+.wl-node-evaluator .wl-node-title {
+  font-family: var(--wl-mono);
+  font-size: 12.5px;
+}
+
+.wl-node-detail {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fg-soft);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-node-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: end;
+  color: var(--fg-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.wl-tag-block {
+  color: var(--wl-block);
+}
+.wl-tag-escalate {
+  color: var(--wl-escalate);
+}
+.wl-tag-invalid {
+  color: var(--danger);
+}
+
+/* A traced pull request colours each node by what happened there. */
+.wl-node.wl-status-pass,
+.wl-node.wl-status-visited {
+  --tone: var(--wl-merge);
+}
+.wl-node.wl-status-pending {
+  --tone: var(--wl-pending);
+}
+.wl-node.wl-status-error,
+.wl-node.wl-status-low_confidence,
+.wl-node.wl-status-fail {
+  --tone: var(--wl-escalate);
+}
+.wl-node.wl-status-fail.wl-fail-block {
+  --tone: var(--wl-block);
+}
+.wl-node.wl-status-skipped {
+  --tone: var(--track-bg);
+  opacity: 0.6;
+}
+
+.wl-node.wl-status-fail,
+.wl-node.wl-status-error,
+.wl-node.wl-status-low_confidence,
+.wl-node.wl-status-pending {
+  border-color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 9%, var(--surface));
+}
+
+/* An outcome keeps its own colour when a pull request reaches it. */
+.wl-node-outcome.wl-status-visited.wl-tone-escalate {
+  --tone: var(--wl-escalate);
+}
+.wl-node-outcome.wl-status-visited.wl-tone-block {
+  --tone: var(--wl-block);
+}
+.wl-node-outcome.wl-status-visited.wl-tone-merge {
+  --tone: var(--wl-merge);
+}
+.wl-node-outcome.wl-status-visited {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--tone) 40%, transparent);
+}
+.wl-node-outcome .wl-node-status {
+  display: none;
+}
+
+.wl-canvas .react-flow__edge-path.wl-edge {
+  stroke: var(--track-bg);
+  stroke-width: 1.5;
+}
+
+.wl-canvas .react-flow__edge-path.wl-edge-active {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.wl-canvas .react-flow__edge-path.wl-edge-dimmed {
+  opacity: 0.35;
+}
+
+.wl-edge-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  padding: 2px 9px;
+  color: var(--fg-soft);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.wl-edge-name {
+  max-width: 108px;
+  overflow: hidden;
+  font-family: var(--wl-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+}
+
+.wl-edge-label-active {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.wl-edge-count {
+  border-radius: 999px;
+  background: var(--bg-soft);
+  padding: 0 6px;
+  color: var(--fg);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
+}
+
+.wl-add {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--track-bg);
+  border-radius: 50%;
+  background: var(--surface);
+  padding: 0;
+  color: var(--fg-soft);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.wl-add:hover {
+  border-color: var(--accent);
+  background: var(--fill);
+  color: var(--fill-ink);
+}
+
+@media (max-width: 1100px) {
+  .wl-editor {
+    grid-template-columns: 260px minmax(0, 1fr) 320px;
+  }
+}
