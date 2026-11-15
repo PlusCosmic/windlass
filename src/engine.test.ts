@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { decide } from "./engine.js";
-import type { EvaluatorRequest, EvaluatorRunner } from "./evaluators/types.js";
+import { EvaluatorNotRun, type EvaluatorRequest, type EvaluatorRunner } from "./evaluators/types.js";
 import type { PullRequestInput } from "./facts/types.js";
 import { defaultGateRegistry } from "./gates/registry.js";
 import { defineGate } from "./gates/types.js";
@@ -17,6 +17,7 @@ categories:
       - paths_only: ["**/*.md"]
     evaluators:
       - id: docs_are_accurate
+        question: Do the docs describe what the code does?
         min_confidence: 0.8
         model: requested-model
     outcome: merge
@@ -187,5 +188,78 @@ describe("decide", () => {
   it("is deterministic for the same input", async () => {
     const options = { policy, evaluators: runner(passVerdict), now: () => new Date(0) };
     expect(await decide(pr("docs_only"), options)).toEqual(await decide(pr("docs_only"), options));
+  });
+
+  describe("evaluator questions and evidence", () => {
+    const flagged = `
+policy: v1
+categories:
+  flagged_feature:
+    evaluators:
+      - id: fully_flag_gated
+        min_confidence: 0.8
+    outcome: merge
+`;
+    const flaggedPr = (flag?: string): PullRequestInput => ({
+      baseSha: "base",
+      headSha: "head",
+      body: `\`\`\`windlass\ncategory: flagged_feature\n${flag ? `flag: ${flag}\n` : ""}\`\`\``,
+      diff,
+    });
+
+    it("asks the question with the declared flag filled in", async () => {
+      let seen: EvaluatorRequest | undefined;
+      const decision = await decide(flaggedPr("clip_search"), {
+        policy: flagged,
+        evaluators: runner(passVerdict, (r) => (seen = r)),
+      });
+      expect(decision.outcome).toBe("merge");
+      expect(seen?.question).toContain("feature flag `clip_search`");
+      expect(seen?.question).not.toContain("{{");
+    });
+
+    it("escalates without asking when the PR declares no flag", async () => {
+      let calls = 0;
+      const decision = await decide(flaggedPr(), { policy: flagged, evaluators: runner(passVerdict, () => calls++) });
+      expect(calls).toBe(0);
+      expect(decision).toMatchObject({
+        outcome: "escalate",
+        evaluators: [{ status: "error", reason: "the question needs `flag`, which the PR did not declare" }],
+      });
+    });
+
+    it("escalates on a verdict that cites a file the diff doesn't change", async () => {
+      const output = { verdict: "pass", confidence: 0.99, evidence: [{ file: "src/secret.ts", detail: "fine" }] };
+      const decision = await decide(flaggedPr("f"), { policy: flagged, evaluators: runner(output) });
+      expect(decision).toMatchObject({
+        outcome: "escalate",
+        evaluators: [{ status: "error", verdict: null, reason: "evaluator cited a file the diff does not change" }],
+      });
+    });
+
+    it("escalates on a fail with no evidence, as an error rather than a verdict", async () => {
+      const output = { verdict: "fail", confidence: 0.9, evidence: [] };
+      const decision = await decide(flaggedPr("f"), { policy: flagged, evaluators: runner(output) });
+      expect(decision.evaluators[0]).toMatchObject({ status: "error", verdict: null });
+    });
+
+    it("keeps a bounded amount of evidence", async () => {
+      const evidence = Array.from({ length: 30 }, () => ({ file: "README.md", detail: "x".repeat(2000) }));
+      const decision = await decide(flaggedPr("f"), {
+        policy: flagged,
+        evaluators: runner({ verdict: "pass", confidence: 0.9, evidence }),
+      });
+      expect(decision.evaluators[0]?.evidence).toHaveLength(20);
+      expect(decision.evaluators[0]?.evidence[0]?.detail).toHaveLength(600);
+    });
+
+    it("records not_run and escalates when the runner has no verdict and didn't ask", async () => {
+      const cacheOnly: EvaluatorRunner = { run: async () => Promise.reject(new EvaluatorNotRun()) };
+      const decision = await decide(flaggedPr("f"), { policy: flagged, evaluators: cacheOnly });
+      expect(decision).toMatchObject({
+        outcome: "escalate",
+        evaluators: [{ status: "not_run", reason: "not run yet" }],
+      });
+    });
   });
 });

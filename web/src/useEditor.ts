@@ -26,10 +26,17 @@ export interface Editor {
   discard: () => void;
   /** Runs the simulation again, after the stored pull requests changed. */
   refresh: () => Promise<void>;
+  /**
+   * Asks the runner every evaluator question the stored pull requests reach under the draft and have no answer
+   * for. Resolves to how many were asked; the answers arrive on later simulations.
+   */
+  evaluate: () => Promise<number>;
   retry: () => void;
 }
 
 const UNDO_LIMIT = 100;
+/** How often to replay while a runner still has questions to answer. */
+const POLL_MS = 3000;
 
 interface Draft {
   /** Null while the editor shows the default branch's policy unchanged. */
@@ -125,6 +132,15 @@ export function useEditor(): Editor {
     };
   }, [phase, repo, effectiveDraft, revision, fail]);
 
+  // A runner answers in its own time. While it has questions waiting, replay every few seconds to pick the
+  // answers up. Each result arms one timer, and an edit or a replay in flight disarms it, so they never stack.
+  const waiting = (simulation?.evaluators.queued ?? 0) > 0;
+  useEffect(() => {
+    if (!waiting || simulating) return;
+    const timer = window.setTimeout(() => setRevision((n) => n + 1), POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [waiting, simulating, simulation]);
+
   const source = draft ?? saved ?? "";
 
   const change = useCallback((next: string | null) => {
@@ -171,6 +187,13 @@ export function useEditor(): Editor {
     setRevision((n) => n + 1);
   }, []);
 
+  const evaluate = useCallback(async () => {
+    if (repo === null) return 0;
+    const { queued } = await api.evaluate(repo, effectiveDraft);
+    setRevision((n) => n + 1);
+    return queued;
+  }, [repo, effectiveDraft]);
+
   return useMemo(
     () => ({
       phase,
@@ -189,6 +212,7 @@ export function useEditor(): Editor {
       undo,
       discard: () => change(null),
       refresh,
+      evaluate,
       retry: () => setAttempt((n) => n + 1),
     }),
     [
@@ -207,6 +231,7 @@ export function useEditor(): Editor {
       change,
       undo,
       refresh,
+      evaluate,
     ],
   );
 }

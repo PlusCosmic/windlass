@@ -16,7 +16,7 @@ import {
 import { IconLogout } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PolicyEdit } from "../../src/policy/edit";
-import { api } from "./api";
+import { api, type RunnerStatus } from "./api";
 import { Canvas, type AddTarget } from "./Canvas";
 import { copy } from "./copy/app";
 import { Inspector } from "./Inspector";
@@ -28,6 +28,8 @@ import { YamlPane } from "./YamlPane";
 type Tab = "node" | "pull" | "yaml";
 
 const IMPORT_LIMIT = 40;
+/** Until the first simulation says otherwise. */
+const NO_RUNNER: RunnerStatus = { online: false, models: [], queued: 0 };
 
 function pullFromUrl(): number | null {
   const value = Number(new URLSearchParams(window.location.search).get("pr"));
@@ -41,7 +43,7 @@ export function App() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedPull, setSelectedPull] = useState<number | null>(pullFromUrl);
   const [adding, setAdding] = useState<AddTarget | null>(null);
-  const [busy, setBusy] = useState<"import" | "propose" | null>(null);
+  const [busy, setBusy] = useState<"import" | "propose" | "evaluate" | null>(null);
 
   const { simulation, repo, me } = editor;
   const graph = simulation?.graph ?? null;
@@ -151,6 +153,17 @@ export function App() {
           </a>
         ),
       });
+    } catch (error) {
+      toast.show({ message: (error instanceof Error && error.message) || copy.errors.generic, tone: "error" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runEvaluators = async () => {
+    setBusy("evaluate");
+    try {
+      toast.show({ message: copy.inspector.evaluator.runs.asked(await editor.evaluate()) });
     } catch (error) {
       toast.show({ message: (error instanceof Error && error.message) || copy.errors.generic, tone: "error" });
     } finally {
@@ -287,12 +300,18 @@ export function App() {
                 adding={adding}
                 source={editor.source}
                 gates={me.gates}
+                evaluators={me.evaluators}
+                runner={simulation?.evaluators ?? NO_RUNNER}
                 replay={replay}
                 pulls={pulls}
+                selectedPull={selectedPull}
+                valid={valid}
+                running={busy === "evaluate"}
                 apply={apply}
                 onSelectNode={selectNode}
                 onSelectPull={selectPull}
                 onCancelAdd={() => setAdding(null)}
+                onRunEvaluators={() => void runEvaluators()}
               />
             ) : null}
           </aside>

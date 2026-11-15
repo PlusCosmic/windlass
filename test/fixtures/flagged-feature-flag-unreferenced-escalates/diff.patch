@@ -1,0 +1,12 @@
+diff --git a/api/Clips/ClipEndpoints.cs b/api/Clips/ClipEndpoints.cs
+index f9f7463..0574c0e 100644
+--- a/api/Clips/ClipEndpoints.cs
++++ b/api/Clips/ClipEndpoints.cs
+@@ -5,6 +5,7 @@ public static class ClipEndpoints
+     public static void Map(WebApplication app)
+     {
+         app.MapGet("/api/clips", ClipHandlers.List).RequireAuthorization();
++        app.MapGet("/api/clips/recent", ClipHandlers.Recent).RequireAuthorization();
+         app.MapPost("/api/clips/search", ClipHandlers.Search)
+             .RequireAuthorization()
+             .RequireFeature(FeatureFlagKeys.ClipSearch);

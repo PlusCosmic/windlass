@@ -23,6 +23,10 @@
 .wl-tone-pending {
   --tone: var(--wl-pending);
 }
+/* Nothing to report: an evaluator nobody has an answer from. */
+.wl-tone-idle {
+  --tone: var(--fg-soft);
+}
 
 /* The editor fills the window under the top bar; its panels scroll, the page doesn't. */
 html {
@@ -221,6 +225,7 @@ html {
 }
 
 .wl-pull:focus-visible,
+.wl-run:focus-visible,
 .wl-step-head:focus-visible,
 .wl-gate-choice:focus-visible,
 .wl-add:focus-visible,
@@ -408,6 +413,125 @@ html {
   line-height: 1.4;
 }
 
+/* An evaluator is a model's advice, not a rule, so wherever one is drawn its edge is dashed. */
+.wl-evaluator-choice {
+  border-left: 3px dashed var(--info);
+}
+
+.wl-kind {
+  justify-self: start;
+}
+
+/* A question is prose: read, not scanned like a name. */
+.wl-question {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.wl-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.wl-range input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.wl-range output {
+  min-width: 4ch;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* What an evaluator made of each stored pull request that reached it. */
+.wl-runs {
+  margin: 0;
+  border-top: 1px solid var(--line);
+  padding: 0;
+  list-style: none;
+}
+
+.wl-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 3px 8px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  padding: 8px 6px;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-run:hover {
+  background: var(--bg-soft);
+}
+
+.wl-run.wl-selected {
+  background: color-mix(in oklab, var(--accent) 9%, var(--surface));
+}
+
+.wl-run-title {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-run-why {
+  display: -webkit-box;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--fg-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.wl-verdict {
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--tone) 16%, transparent);
+  padding: 3px 6px;
+  color: color-mix(in oklab, var(--tone) 80%, var(--fg));
+  font-family: var(--wl-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.wl-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.wl-queued {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-soft);
+  font-size: 12px;
+}
+
 .wl-reasons {
   display: grid;
   gap: 6px;
@@ -463,7 +587,14 @@ html {
   cursor: default;
 }
 
+/* A node's id has no spaces, and an evaluator's is long. */
+.wl-step-head .wl-code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .wl-step-status {
+  flex: none;
   color: var(--tone);
   font-size: 11px;
   font-weight: 700;
@@ -472,8 +603,23 @@ html {
 }
 
 .wl-step.wl-status-pass .wl-step-status,
+.wl-step.wl-status-not_run .wl-step-status,
 .wl-step.wl-status-skipped .wl-step-status {
   color: var(--fg-soft);
+}
+
+/* An evaluator can only escalate, so its failure is never the block colour. */
+.wl-step-evaluator {
+  border-left-style: dashed;
+}
+.wl-step-evaluator.wl-status-fail {
+  --tone: var(--wl-escalate);
+}
+
+.wl-step-facts {
+  margin-top: 4px;
+  gap: 2px 12px;
+  font-size: 12px;
 }
 
 .wl-step-reason {
@@ -629,6 +775,12 @@ html {
   font-size: 16px;
 }
 
+/* A model's advice, not a rule: a dashed edge in the info colour, until a traced pull request colours it. */
+.wl-node.wl-node-evaluator {
+  --tone: var(--info);
+  border-left-style: dashed;
+}
+
 .wl-node.wl-invalid {
   border-color: var(--danger);
   border-style: dashed;
@@ -675,6 +827,11 @@ html {
   background: color-mix(in oklab, var(--wl-escalate) 20%, transparent);
   color: color-mix(in oklab, var(--wl-escalate) 70%, var(--fg));
   font-variant-numeric: tabular-nums;
+}
+
+.wl-node-count-idle {
+  background: color-mix(in oklab, var(--fg-soft) 16%, transparent);
+  color: var(--fg-soft);
 }
 
 .wl-node-title {
@@ -739,6 +896,9 @@ html {
 }
 .wl-node.wl-status-fail.wl-fail-block {
   --tone: var(--wl-block);
+}
+.wl-node.wl-status-not_run {
+  --tone: var(--fg-soft);
 }
 .wl-node.wl-status-skipped {
   --tone: var(--track-bg);

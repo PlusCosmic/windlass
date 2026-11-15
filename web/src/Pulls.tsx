@@ -1,9 +1,11 @@
 import { Button, Chip, ChipRow, cx, EmptyState } from "@pluscosmic/ui";
 import { IconExternalLink } from "@tabler/icons-react";
 import { useState } from "react";
+import type { EvaluatorRecord } from "../../src/decision";
 import type { FlowGraph, Trace } from "../../src/graph";
 import type { SimulatedPull } from "./api";
 import { copy } from "./copy/app";
+import { formatConfidence } from "./evaluators";
 import { countOutcomes } from "./trace";
 
 type Outcome = SimulatedPull["draft"]["outcome"];
@@ -109,6 +111,35 @@ export function PullList({ pulls, selected, onSelect, canImport, importing, onIm
 
 const MAX_EVIDENCE = 8;
 
+/** One line of the node-by-node list: a built-in check, a gate or an evaluator. */
+interface Step {
+  node: string;
+  status: EvaluatorRecord["status"] | "pending";
+  reason: string;
+  evidence: EvaluatorRecord["evidence"];
+  /** Set on an evaluator's step: what the model answered, if it did. */
+  evaluator: EvaluatorRecord | null;
+}
+
+/** How sure the model was against how sure it had to be, and which model it was. */
+function Answer({ record }: { record: EvaluatorRecord }) {
+  const needed = formatConfidence(record.minConfidence);
+  return (
+    <dl className="wl-facts wl-step-facts">
+      <dt>{copy.detail.evaluator.confidence}</dt>
+      <dd>
+        {record.confidence === null
+          ? copy.detail.evaluator.unanswered(needed)
+          : copy.detail.evaluator.answered(formatConfidence(record.confidence), needed)}
+      </dd>
+      <dt>{copy.detail.evaluator.model}</dt>
+      <dd className={record.model === null ? undefined : "wl-code"}>
+        {record.model ?? copy.detail.evaluator.modelDefault}
+      </dd>
+    </dl>
+  );
+}
+
 interface PullDetailProps {
   pull: SimulatedPull | null;
   trace: Trace | null;
@@ -128,19 +159,22 @@ export function PullDetail({ pull, trace, graph, githubRepo, onSelectNode }: Pul
   }
   const { draft, current } = pull;
   const known = new Set(graph?.nodes.map((node) => node.id));
-  const steps = [
-    ...draft.builtins.map((b) => ({
-      node: b.node as string,
-      status: b.status as string,
-      reason: b.reason,
-      evidence: [] as (typeof draft.gates)[number]["evidence"],
+  const steps: Step[] = [
+    ...draft.builtins.map((b) => ({ node: b.node, status: b.status, reason: b.reason, evidence: [], evaluator: null })),
+    ...draft.gates.map((g) => ({
+      node: g.node,
+      status: g.status,
+      reason: g.reason,
+      evidence: g.evidence,
+      evaluator: null,
     })),
-    ...draft.gates.map((g) => ({ node: g.node, status: g.status as string, reason: g.reason, evidence: g.evidence })),
     ...draft.evaluators.map((e) => ({
       node: e.node,
-      status: e.status as string,
-      reason: e.reason,
+      status: e.status,
+      // A pass needs no explaining: the confidence beside it says how sure the model was.
+      reason: e.status === "pass" ? "" : e.reason,
       evidence: e.evidence,
+      evaluator: e,
     })),
   ];
 
@@ -199,18 +233,20 @@ export function PullDetail({ pull, trace, graph, githubRepo, onSelectNode }: Pul
         <h3 className="ui-eyebrow">{copy.detail.nodes}</h3>
         <ol className="wl-steps">
           {steps.map((step) => (
-            <li key={step.node} className={`wl-step wl-status-${step.status}`}>
+            <li
+              key={step.node}
+              className={cx("wl-step", `wl-status-${step.status}`, step.evaluator && "wl-step-evaluator")}
+            >
               <button
                 type="button"
                 className="wl-step-head"
                 disabled={!known.has(step.node)}
                 onClick={() => onSelectNode(step.node)}
               >
-                <span className="wl-step-status">
-                  {copy.canvas.status[trace?.nodes[step.node] ?? (step.status as "pass")]}
-                </span>
+                <span className="wl-step-status">{copy.canvas.status[trace?.nodes[step.node] ?? step.status]}</span>
                 <span className="wl-code">{step.node}</span>
               </button>
+              {step.evaluator && step.evaluator.status !== "skipped" ? <Answer record={step.evaluator} /> : null}
               {step.reason ? <p className="wl-step-reason">{step.reason}</p> : null}
               {step.evidence.length > 0 ? (
                 <ul className="wl-evidence">

@@ -161,3 +161,78 @@ describe("readGate", () => {
     expect(readGate("policy: [v1", { category: null, index: 0 })).toBeNull();
   });
 });
+
+describe("evaluator edits", () => {
+  const at = { category: "docs_only", index: 0 };
+
+  it("adds an evaluator before the lane's outcome, with its question as a block", () => {
+    const source = applyEdit(SOURCE, {
+      type: "add_evaluator",
+      category: "docs_only",
+      id: "docs_match_code",
+      question: "Do the docs describe what the code does?\nFail on anything invented.",
+      minConfidence: 0.8,
+    });
+    expect(source).toContain(`      - paths_only: ["docs/**"]
+    evaluators:
+      - id: docs_match_code
+        min_confidence: 0.8
+        question: |
+          Do the docs describe what the code does?
+          Fail on anything invented.
+    outcome: merge
+`);
+    expect(source).toContain("# Narrower than");
+    const parsed = parsePolicy(source, registry);
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
+    expect(parsed.policy.categories.docs_only?.evaluators[0]).toMatchObject({
+      evaluator: "docs_match_code",
+      question: "Do the docs describe what the code does?\nFail on anything invented.",
+      minConfidence: 0.8,
+    });
+  });
+
+  it("changes, clears and removes one", () => {
+    const added = applyEdit(SOURCE, {
+      type: "add_evaluator",
+      category: "docs_only",
+      id: "fully_flag_gated",
+      minConfidence: 0.85,
+    });
+    expect(added).not.toContain("question");
+
+    const changed = applyEdit(added, {
+      type: "set_evaluator",
+      at,
+      question: "Is it behind {{flag}}?",
+      minConfidence: 0.9,
+      model: "claude-haiku-5-5",
+    });
+    const parsed = parsePolicy(changed, registry);
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
+    expect(parsed.policy.categories.docs_only?.evaluators[0]).toMatchObject({
+      question: "Is it behind {{flag}}?",
+      questionFromPreset: false,
+      minConfidence: 0.9,
+      model: "claude-haiku-5-5",
+    });
+
+    const cleared = applyEdit(changed, { type: "set_evaluator", at, question: null, model: null });
+    expect(cleared).not.toContain("question");
+    expect(cleared).not.toContain("model");
+
+    const removed = applyEdit(cleared, { type: "remove_evaluator", at });
+    expect(parsePolicy(removed, registry)).toMatchObject({ ok: true });
+    expect(removed).not.toContain("fully_flag_gated");
+  });
+
+  it("refuses an evaluator that isn't there or a bad name", () => {
+    expect(() => applyEdit(SOURCE, { type: "remove_evaluator", at })).toThrow("has no evaluators");
+    expect(() =>
+      applyEdit(SOURCE, { type: "add_evaluator", category: "docs_only", id: "Not Snake", minConfidence: 0.5 }),
+    ).toThrow("snake_case");
+    expect(() => applyEdit(SOURCE, { type: "add_evaluator", category: "nope", id: "x", minConfidence: 0.5 })).toThrow(
+      "not in the policy",
+    );
+  });
+});

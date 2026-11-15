@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import type { DecisionOutcome, DecisionRecord } from "./decision.js";
 import { decide, type DecideOptions } from "./engine.js";
+import type { EvaluatorRunner } from "./evaluators/types.js";
 import type { PullRequestInput } from "./facts/types.js";
 
 /**
@@ -34,6 +35,11 @@ const CaseSchema = z.strictObject({
       }),
     )
     .optional(),
+  /**
+   * What each evaluator answers, by evaluator name. Stands in for the model, so a
+   * case can show what the engine does with a verdict. Without it evaluators have no runner.
+   */
+  verdicts: z.record(z.string(), z.unknown()).optional(),
   expect: z.strictObject({
     outcome: z.enum(["merge", "escalate", "block", "pending"]),
     category: z.string().nullable().optional(),
@@ -41,6 +47,10 @@ const CaseSchema = z.strictObject({
     reasons: z.array(z.string()).optional(),
     /** Expected status per gate node id, e.g. `always[1]:no_new_skips: fail`. */
     gates: z.record(z.string(), z.enum(["pass", "fail", "error", "pending"])).optional(),
+    /** Expected status per evaluator node id, e.g. `flagged_feature.eval[0]:fully_flag_gated: pass`. */
+    evaluators: z
+      .record(z.string(), z.enum(["pass", "fail", "low_confidence", "error", "not_run", "skipped"]))
+      .optional(),
   }),
 });
 
@@ -53,6 +63,8 @@ export interface Fixture {
   policyPath: string;
   policySource: string;
   input: PullRequestInput;
+  /** Stubbed evaluator outputs by evaluator name, when the case gives any. */
+  verdicts?: Record<string, unknown>;
   expect: FixtureExpectation;
 }
 
@@ -86,6 +98,7 @@ export function loadFixture(dir: string): Fixture {
     expect: raw.expect,
   };
   if (raw.description !== undefined) fixture.description = raw.description;
+  if (raw.verdicts !== undefined) fixture.verdicts = raw.verdicts;
   return fixture;
 }
 
@@ -101,10 +114,21 @@ export async function runFixture(dir: string, options: Omit<DecideOptions, "poli
   const fixture = loadFixture(dir);
   const decision = await decide(fixture.input, {
     now: () => new Date(0),
+    ...(fixture.verdicts && { evaluators: stubRunner(fixture.verdicts) }),
     ...options,
     policy: fixture.policySource,
   });
   return { fixture, decision, mismatches: checkExpectation(decision, fixture.expect) };
+}
+
+/** A runner that answers from a case's `verdicts`; an evaluator the case doesn't cover fails. */
+export function stubRunner(verdicts: Record<string, unknown>): EvaluatorRunner {
+  return {
+    async run(request) {
+      if (!Object.hasOwn(verdicts, request.evaluator)) throw new Error(`no stubbed verdict for ${request.evaluator}`);
+      return { model: "fixture", output: verdicts[request.evaluator] };
+    },
+  };
 }
 
 export function checkExpectation(decision: DecisionRecord, expect: FixtureExpectation): string[] {
@@ -129,6 +153,16 @@ export function checkExpectation(decision: DecisionRecord, expect: FixtureExpect
       mismatches.push(`gates: node ${node} did not run (ran: ${decision.gates.map((g) => g.node).join(", ")})`);
     else if (gate.status !== status)
       mismatches.push(`gates: ${node} expected ${status}, got ${gate.status} (${gate.reason})`);
+  }
+  for (const [node, status] of Object.entries(expect.evaluators ?? {})) {
+    const evaluator = decision.evaluators.find((e) => e.node === node);
+    if (!evaluator) {
+      mismatches.push(
+        `evaluators: node ${node} is not in the record (has: ${decision.evaluators.map((e) => e.node).join(", ")})`,
+      );
+    } else if (evaluator.status !== status) {
+      mismatches.push(`evaluators: ${node} expected ${status}, got ${evaluator.status} (${evaluator.reason})`);
+    }
   }
   return mismatches;
 }

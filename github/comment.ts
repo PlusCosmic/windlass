@@ -19,6 +19,7 @@ const STATUS_ICONS: Record<string, string> = {
   error: "⚠️",
   pending: "⏳",
   low_confidence: "❔",
+  not_run: "⏸️",
   skipped: "⏭️",
 };
 

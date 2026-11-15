@@ -3,15 +3,20 @@ import { z } from "zod";
 import {
   decide,
   defaultGateRegistry,
+  evaluatorPresets,
+  NOT_RUN_NO_RUNNER,
   parsePolicy,
   policyToGraph,
+  QUESTION_PLACEHOLDERS,
   type DecisionRecord,
+  type EvaluatorPreset,
   type FlowGraph,
   type GateRegistry,
   type PolicyError,
   type PolicyResult,
 } from "../../src/index.js";
 import { evaluatePullRequest, snapshotPullRequest, type Snapshot } from "../../github/run.js";
+import type { Evaluations, EvaluatorStatus } from "./evaluations.js";
 import { checkFor, type AppGitHubPort } from "./port.js";
 import type { PullState, Repo, Store, StoredPull } from "./store.js";
 
@@ -27,7 +32,18 @@ export interface ServiceOptions {
   /** Public origin of the editor, for links from check runs. */
   baseUrl?: string;
   gates?: GateRegistry;
+  /** Where evaluator questions go. Without it evaluators have no runner, and their lanes escalate. */
+  evaluations?: Evaluations;
+  /** How long judging a live PR waits for a runner's answer. */
+  evaluatorTimeoutMs?: number;
   now?: () => Date;
+}
+
+/** What the editor needs to offer evaluators. */
+export interface EvaluatorCatalog {
+  presets: readonly EvaluatorPreset[];
+  /** Names a question can use as `{{name}}`. */
+  placeholders: readonly string[];
 }
 
 /** A gate the editor can add, with the shape of its arguments. */
@@ -58,7 +74,12 @@ export interface Simulation {
   /** Policy errors that belong to no node of the graph. */
   unplaced: PolicyError[];
   pulls: SimulatedPull[];
+  /** Whether a runner is there to answer evaluators, and how much it has waiting. */
+  evaluators: EvaluatorStatus;
 }
+
+/** A runner works through its jobs one at a time, so a live PR may wait behind a replay. */
+const DEFAULT_EVALUATOR_TIMEOUT_MS = 15 * 60_000;
 
 export class ServiceError extends Error {
   constructor(
@@ -87,6 +108,14 @@ export class Service {
     return { policyPath: this.options.policyPath };
   }
 
+  private get evaluations(): Evaluations | undefined {
+    return this.options.evaluations;
+  }
+
+  evaluatorCatalog(): EvaluatorCatalog {
+    return { presets: evaluatorPresets, placeholders: QUESTION_PLACEHOLDERS };
+  }
+
   catalog(): GateInfo[] {
     return this.gates.names().map((name) => {
       const gate = this.gates.get(name)!;
@@ -107,7 +136,11 @@ export class Service {
     const access = await this.github.forRepo(repo);
     if (!access?.write) throw new ServiceError(409, `Windlass can't report on ${repo.owner}/${repo.name}`);
 
-    const result = await evaluatePullRequest(access.port, number, this.config);
+    const result = await evaluatePullRequest(access.port, number, {
+      ...this.config,
+      ...(this.evaluations && { evaluators: this.evaluations.runner("wait", repo.installationId) }),
+      evaluatorTimeoutMs: this.options.evaluatorTimeoutMs ?? DEFAULT_EVALUATOR_TIMEOUT_MS,
+    });
     if (result.status === "skipped") return null;
 
     const { snapshot, decision } = result;
@@ -151,15 +184,21 @@ export class Service {
 
   /**
    * Decides every stored PR of a repo twice: under the policy on the default
-   * branch and under `draft`. Nothing is written, here or on GitHub.
+   * branch and under `draft`. Nothing is written, here or on GitHub, and no
+   * model is asked anything: evaluators answer from stored verdicts or show as not run.
    */
   async simulate(repo: Repo, draft: string | null): Promise<Simulation> {
     const currentPolicy = this.parse(repo.policySource, repo);
     const draftPolicy = draft === null ? currentPolicy : parsePolicy(draft, this.gates);
+    const options = {
+      gates: this.gates,
+      now: this.now,
+      ...(this.evaluations && { evaluators: this.evaluations.runner("cached", repo.installationId) }),
+    };
 
     const pulls: SimulatedPull[] = [];
     for (const pull of this.store.listPulls(repo.id)) {
-      const current = await decide(pull.input, { policy: currentPolicy, gates: this.gates, now: this.now });
+      const current = await decide(pull.input, { ...options, policy: currentPolicy });
       pulls.push({
         number: pull.number,
         title: pull.title,
@@ -167,10 +206,7 @@ export class Service {
         state: pull.state,
         headSha: pull.headSha,
         current,
-        draft:
-          draftPolicy === currentPolicy
-            ? current
-            : await decide(pull.input, { policy: draftPolicy, gates: this.gates, now: this.now }),
+        draft: draftPolicy === currentPolicy ? current : await decide(pull.input, { ...options, policy: draftPolicy }),
       });
     }
 
@@ -182,7 +218,31 @@ export class Service {
       graph: drawn?.graph ?? null,
       unplaced: drawn?.unplaced ?? errors,
       pulls,
+      evaluators: this.evaluations?.status(repo.installationId) ?? { online: false, models: [], queued: 0 },
     };
+  }
+
+  /**
+   * Asks a runner every evaluator question the stored PRs reach under `draft`
+   * and have no verdict for. Returns at once; the verdicts show on later replays.
+   *
+   * An evaluator only runs while its PR is still on the merge path, so a lane's
+   * second evaluator is asked once its first has passed.
+   */
+  async evaluateStored(repo: Repo, draft: string | null): Promise<{ queued: number }> {
+    if (!this.evaluations) throw new ServiceError(409, "this Windlass has no evaluator runner configured");
+    const policy = draft === null ? this.parse(repo.policySource, repo) : parsePolicy(draft, this.gates);
+    if (!policy.ok) throw new ServiceError(400, "the policy is invalid; fix its errors before running evaluators");
+    if (!this.evaluations.status(repo.installationId).online) {
+      throw new ServiceError(409, NOT_RUN_NO_RUNNER);
+    }
+
+    const before = this.evaluations.status(repo.installationId).queued;
+    const evaluators = this.evaluations.runner("enqueue", repo.installationId);
+    for (const pull of this.store.listPulls(repo.id)) {
+      await decide(pull.input, { policy, gates: this.gates, now: this.now, evaluators });
+    }
+    return { queued: this.evaluations.status(repo.installationId).queued - before };
   }
 
   /**

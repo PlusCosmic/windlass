@@ -1,0 +1,25 @@
+description: An endpoint outside the flag escalates on the evaluator's verdict
+body: |
+  Adds clip reactions behind a flag.
+
+  ```windlass
+  category: flagged_feature
+  flag: clip_reactions
+  ```
+ci:
+  - name: build
+    conclusion: success
+verdicts:
+  fully_flag_gated:
+    verdict: fail
+    confidence: 0.96
+    evidence:
+      - file: api/Clips/ClipEndpoints.cs
+        line: 14
+        detail: GET /api/clips/{id}/reactions has no RequireFeature, so it answers while the flag is off.
+expect:
+  outcome: escalate
+  category: flagged_feature
+  reasons: ["evaluator verdict: fail"]
+  evaluators:
+    flagged_feature.eval[0]:fully_flag_gated: fail

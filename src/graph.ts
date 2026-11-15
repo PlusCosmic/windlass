@@ -29,6 +29,12 @@ export interface GateRef {
   index: number;
 }
 
+/** Where an evaluator sits in the policy file: `categories.<category>.evaluators[index]`. */
+export interface EvaluatorRef {
+  category: string;
+  index: number;
+}
+
 interface NodeBase {
   /** The id `DecisionRecord.path` uses for this node, where the engine has one. */
   id: string;
@@ -53,7 +59,17 @@ export type FlowNode =
       onFailSet: boolean;
     })
   | (NodeBase & { kind: "router" })
-  | (NodeBase & { kind: "evaluator"; evaluator: string; minConfidence: number; model: string | null })
+  | (NodeBase & {
+      kind: "evaluator";
+      ref: EvaluatorRef;
+      evaluator: string;
+      /** The question as it will be asked, before its placeholders are filled. */
+      question: string;
+      /** True when the policy leaves the question to the built-in one for this name. */
+      questionFromPreset: boolean;
+      minConfidence: number;
+      model: string | null;
+    })
   | (NodeBase & { kind: "outcome"; outcome: Outcome; fallback: boolean });
 
 export interface FlowEdge {
@@ -159,7 +175,10 @@ export function policyToGraph(
         kind: "evaluator",
         id: evaluator.id,
         lane: name,
+        ref: { category: name, index },
         evaluator: evaluator.evaluator,
+        question: evaluator.question,
+        questionFromPreset: evaluator.questionFromPreset,
         minConfidence: evaluator.minConfidence,
         model: evaluator.model ?? null,
         errors: errorsAt(`categories.${name}.evaluators[${index}]`),
@@ -236,6 +255,9 @@ export function traceDecision(graph: FlowGraph, record: DecisionRecord): Trace {
 
   // A skipped evaluator was never reached, though the lane's end beyond it was.
   const reached = (id: string) => id in nodes && nodes[id] !== "skipped";
+  for (const evaluator of record.evaluators) {
+    if (evaluator.status === "skipped") delete reasons[evaluator.node];
+  }
   const known = new Set(graph.nodes.map((node) => node.id));
   for (const id of Object.keys(nodes)) if (!known.has(id)) delete nodes[id];
 

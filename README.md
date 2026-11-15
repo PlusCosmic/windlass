@@ -84,10 +84,34 @@ The editor draws the policy as the flowchart `decide` walks: the built-in checks
 
 - click a pull request to watch it travel the policy, with each node's result and evidence;
 - add, change, move and remove gates, add categories (it lists the ones PRs declared that the policy lacks), and set outcomes;
+- add an evaluator to a lane, write its question, and run it over the remembered PRs to see what a model answers before the policy depends on it;
 - see, as you edit, how every remembered PR would be decided under the draft against the policy on the default branch;
 - edit the YAML directly; edits on the canvas keep the file's comments.
 
 Saving opens a pull request with the new policy. It is never written to the default branch, and since the PR touches `.windlass/`, Windlass escalates it to a human.
+
+### Evaluators
+
+An evaluator puts one yes-or-no question about the diff to a model, and its lane merges only on a confident yes:
+
+```yaml
+flagged_feature:
+  gates:
+    - flag_referenced # the declared flag appears in a line the PR adds
+    - paths_none: ["migrations/**"]
+  evaluators:
+    - id: fully_flag_gated
+      question: |
+        Is everything this diff adds or changes reachable only while the feature flag `{{flag}}` is on?
+      min_confidence: 0.85
+  outcome: merge
+```
+
+`{{flag}}` and `{{issue}}` come from the PR's `windlass` block. `fully_flag_gated` has a built-in question, so `question` can be left out. A fail, an answer below `min_confidence`, an error or no answer all escalate, and a verdict has to cite files the diff changes.
+
+![An evaluator selected in the editor, with its question and what stored pull requests answered](docs/images/evaluator-inspector.png)
+
+Windlass doesn't call the model itself. A **runner**, a second container from the same image, pulls questions from the App and answers them with a credential only it holds: a Claude subscription token or an API key. The model gets the diff, the list of changed files and the question, with every tool off.
 
 [`docs/deploy.md`](docs/deploy.md) covers registering the App, its configuration, deploying it and running it locally.
 

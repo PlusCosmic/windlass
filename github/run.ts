@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { decide, type DecisionRecord, type PolicyResult, type PullRequestInput } from "../src/index.js";
+import {
+  decide,
+  type DecisionRecord,
+  type EvaluatorRunner,
+  type PolicyResult,
+  type PullRequestInput,
+} from "../src/index.js";
 import { commentSha, renderComment, renderWaiting } from "./comment.js";
 import type { GitHubPort, PullRequestData } from "./port.js";
 
@@ -15,6 +21,9 @@ export const OUTCOME_LABELS = {
 export interface RunConfig {
   /** Path of the policy file on the base branch. */
   policyPath: string;
+  /** Answers the policy's evaluators. Without one they have no runner, and their lanes escalate. */
+  evaluators?: EvaluatorRunner;
+  evaluatorTimeoutMs?: number;
 }
 
 /** What a PR looked like when it was judged: enough to decide it again under another policy. */
@@ -47,6 +56,8 @@ export async function snapshotPullRequest(github: GitHubPort, number: number, co
 export function decideSnapshot(snapshot: Snapshot, config: RunConfig, policy?: string): Promise<DecisionRecord> {
   return decide(snapshot.input, {
     policy: policy ?? snapshot.policySource ?? missingPolicy(config.policyPath, snapshot.pr.baseRef),
+    ...(config.evaluators && { evaluators: config.evaluators }),
+    ...(config.evaluatorTimeoutMs !== undefined && { evaluatorTimeoutMs: config.evaluatorTimeoutMs }),
   });
 }
 

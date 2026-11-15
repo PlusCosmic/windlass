@@ -62,6 +62,25 @@ CREATE TABLE IF NOT EXISTS decisions (
   decided_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS decisions_by_pull ON decisions (repo_id, number, id);
+-- Who may take evaluation jobs. A runner holds the model credential; Windlass never does.
+CREATE TABLE IF NOT EXISTS runners (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  token_hash TEXT NOT NULL UNIQUE,
+  -- The one installation it serves; NULL serves them all (a deployment with a single owner).
+  installation_id INTEGER,
+  models TEXT NOT NULL DEFAULT '[]',
+  last_seen_at TEXT
+);
+-- Verdicts by what was asked (prompt version, model, question, diff), so nothing is asked twice.
+CREATE TABLE IF NOT EXISTS verdicts (
+  key TEXT PRIMARY KEY,
+  evaluator TEXT NOT NULL,
+  model TEXT NOT NULL,
+  output TEXT NOT NULL,
+  duration_ms INTEGER,
+  created_at TEXT NOT NULL
+);
 `;
 
 interface RepoRow {
@@ -82,6 +101,31 @@ interface PullRow {
   input: string;
   decision: string | null;
   updated_at: string;
+}
+
+/** Something that answers evaluation jobs with a model credential of its own. */
+export interface Runner {
+  id: number;
+  name: string;
+  installationId: number | null;
+  /** The models it said it can run when it last asked for work; the first is its default. */
+  models: string[];
+  lastSeenAt: string | null;
+}
+
+export interface StoredVerdict {
+  /** The model that answered. */
+  model: string;
+  /** The model's structured output, as the engine validates it. */
+  output: unknown;
+}
+
+interface RunnerRow {
+  id: number;
+  name: string;
+  installation_id: number | null;
+  models: string;
+  last_seen_at: string | null;
 }
 
 /** Windlass's own state: the repos it watches, the PRs it has seen and the decisions it has made. */
@@ -198,6 +242,76 @@ export class Store {
     const row = this.db.prepare("SELECT COUNT(*) AS n FROM decisions WHERE repo_id = ?").get(repoId) as { n: number };
     return row.n;
   }
+
+  /** Registers a runner, or gives an existing name a new token or scope. Only the token's hash is kept. */
+  upsertRunner(name: string, tokenHash: string, installationId: number | null): Runner {
+    this.db
+      .prepare(
+        `INSERT INTO runners (name, token_hash, installation_id) VALUES (?, ?, ?)
+         ON CONFLICT (name) DO UPDATE SET token_hash = excluded.token_hash, installation_id = excluded.installation_id`,
+      )
+      .run(name, tokenHash, installationId);
+    return toRunner(this.db.prepare("SELECT * FROM runners WHERE name = ?").get(name) as unknown as RunnerRow);
+  }
+
+  removeRunner(name: string): void {
+    this.db.prepare("DELETE FROM runners WHERE name = ?").run(name);
+  }
+
+  findRunnerByTokenHash(tokenHash: string): Runner | null {
+    const row = this.db.prepare("SELECT * FROM runners WHERE token_hash = ?").get(tokenHash) as RunnerRow | undefined;
+    return row ? toRunner(row) : null;
+  }
+
+  listRunners(): Runner[] {
+    return (this.db.prepare("SELECT * FROM runners ORDER BY name").all() as unknown as RunnerRow[]).map(toRunner);
+  }
+
+  /** Notes that a runner asked for work, and what it can run. */
+  touchRunner(id: number, models: string[], at: string): void {
+    this.db.prepare("UPDATE runners SET models = ?, last_seen_at = ? WHERE id = ?").run(JSON.stringify(models), at, id);
+  }
+
+  getVerdict(key: string): StoredVerdict | null {
+    const row = this.db.prepare("SELECT model, output FROM verdicts WHERE key = ?").get(key) as
+      { model: string; output: string } | undefined;
+    return row ? { model: row.model, output: JSON.parse(row.output) as unknown } : null;
+  }
+
+  saveVerdict(
+    key: string,
+    verdict: StoredVerdict & { evaluator: string; durationMs?: number | undefined; createdAt: string },
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO verdicts (key, evaluator, model, output, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET
+           model = excluded.model, output = excluded.output, duration_ms = excluded.duration_ms,
+           created_at = excluded.created_at`,
+      )
+      .run(
+        key,
+        verdict.evaluator,
+        verdict.model,
+        JSON.stringify(verdict.output),
+        verdict.durationMs ?? null,
+        verdict.createdAt,
+      );
+  }
+
+  countVerdicts(): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM verdicts").get() as { n: number }).n;
+  }
+}
+
+function toRunner(row: RunnerRow): Runner {
+  return {
+    id: row.id,
+    name: row.name,
+    installationId: row.installation_id,
+    models: JSON.parse(row.models) as string[],
+    lastSeenAt: row.last_seen_at,
+  };
 }
 
 function toRepo(row: RepoRow): Repo {

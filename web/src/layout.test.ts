@@ -31,6 +31,9 @@ categories:
     outcome: escalate
 `;
 
+/** With no always-gates, the trunk's last node before the router is the intent check. */
+const START_GATES_END = "intent";
+
 const overlaps = (a: Box, b: Box) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -75,6 +78,46 @@ describe("layoutGraph", () => {
       [`test_only[0]:paths_only->${laneEnd("test_only")}`]: "test_only",
       // A category with no gates yet: the edge from the router straight to its outcome.
       [`${ROUTER_NODE}->${laneEnd("refactor")}`]: "refactor",
+    });
+  });
+});
+
+describe("layoutGraph with evaluators", () => {
+  const { graph, boxes, addOn } = layoutOf(`
+policy: v1
+categories:
+  flagged_feature:
+    gates:
+      - flag_referenced
+    evaluators:
+      - id: fully_flag_gated
+        min_confidence: 0.85
+      - id: no_new_endpoints
+        question: Does the diff add no HTTP endpoint?
+        min_confidence: 0.9
+    outcome: merge
+  asked_only:
+    evaluators:
+      - id: fully_flag_gated
+        min_confidence: 0.85
+    outcome: merge
+`);
+
+  it("runs a lane's evaluators along its row, after its gates and before its outcome", () => {
+    const row = graph.nodes.filter((node) => node.lane === "flagged_feature");
+    expect(row.map((node) => node.kind)).toEqual(["gate", "evaluator", "evaluator", "outcome"]);
+    const placed = row.map((node) => boxes[node.id]!);
+    expect(new Set(placed.map((box) => box.y)).size).toBe(1);
+    expect(placed.map((box) => box.x)).toEqual([...placed.map((box) => box.x)].sort((a, b) => a - b));
+    expect(new Set(placed.map((box) => box.x)).size).toBe(placed.length);
+  });
+
+  it("offers one add per lane, where its gates end and its evaluators begin", () => {
+    expect(addOn).toEqual({
+      [`${START_GATES_END}->${ROUTER_NODE}`]: null,
+      "flagged_feature[0]:flag_referenced->flagged_feature.eval[0]:fully_flag_gated": "flagged_feature",
+      // No gates: the edge from the router to the lane's first evaluator.
+      [`${ROUTER_NODE}->asked_only.eval[0]:fully_flag_gated`]: "asked_only",
     });
   });
 });

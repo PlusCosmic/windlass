@@ -1,0 +1,21 @@
+description: A flagged feature with a migration escalates before any evaluator is asked
+body: |
+  ```windlass
+  category: flagged_feature
+  flag: clip_reactions
+  ```
+ci:
+  - name: build
+    conclusion: success
+verdicts:
+  fully_flag_gated:
+    verdict: pass
+    confidence: 0.99
+    evidence: []
+expect:
+  outcome: escalate
+  reasons: ["1 changed path(s) match migrations/**"]
+  gates:
+    flagged_feature[1]:paths_none: fail
+  evaluators:
+    flagged_feature.eval[0]:fully_flag_gated: skipped

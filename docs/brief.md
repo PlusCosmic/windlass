@@ -101,6 +101,8 @@ v1 is a GitHub Action plus a small engine library — no server, no database, no
 
 **Revised Nov 15, 2026:** v1 is now a GitHub App with the flowchart editor, brought forward from phase 4; the Action stays as the adapter that needs nothing hosted. The first week of shadow mode showed why: every PR escalated on a category the policy didn't define, and tuning that needs a way to replay real PRs against a draft policy. An App is also what phase 2 needs, since a merge made with the Action's `GITHUB_TOKEN` starts no workflows (main's CI, the post-merge watch) and the Action's workflow file is one a PR can edit. The engine rules are unchanged, and the policy file in the repo is still the source of truth: the editor saves by opening a PR, which escalates like any other change under `.windlass/`.
 
+**Revised Nov 15, 2026 (evaluators):** an evaluator's question is text in the policy file rather than code in the engine, since what "behind the flag" means differs per repo; the engine ships presets (`fully_flag_gated`) a policy can name instead. The model is called by a separate runner that the App hands questions to, never by the App: the runner holds the model credential (a subscription or an API key) and no GitHub credential, and the App the reverse. That split is also how a shared deployment would work, with each installation running its own runner. The declared `flag` is now a plain key, because it is put into the question. Two rules were added: a verdict must cite files the diff changes, and replaying under a draft policy never asks a model.
+
 Flow per PR event:
 
 1. Action triggers on `pull_request` (opened, synchronize) and on CI completion.
@@ -145,5 +147,5 @@ Each phase ships something usable and gates the next on real evidence.
 
   The engine reads only the category and its references (`issue`, `flag`). A missing or malformed block escalates. The PR body is never passed to evaluators.
 
-- **Evaluator model:** configurable per evaluator in the policy (`model:`), defaulting to a different model from the authoring agent, run in a fresh context with schema-validated structured outputs. The model ID goes in the decision record.
+- **Evaluator model:** configurable per evaluator in the policy (`model:`), run in a fresh context with schema-validated structured outputs and no tools. The model ID goes in the decision record. The first runner asks Claude, which is also what authors most PRs here; a second runner on another vendor's model is the way to get the independent reviewer the brief asks for.
 - **Coverage of changed lines:** consume the lcov report produced by the repo's CI and intersect it with the diff's changed lines. No report means the gate errors and the PR escalates. v1 supports lcov only.

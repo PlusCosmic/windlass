@@ -25,6 +25,13 @@ export interface EvaluatorNode {
   id: string;
   /** Evaluator name, e.g. `fully_flag_gated`. */
   evaluator: string;
+  /**
+   * The one question the model answers about the diff, where "pass" means yes.
+   * May hold `{{flag}}` and `{{issue}}`, filled from the PR's declared intent.
+   */
+  question: string;
+  /** True when the policy doesn't write the question and the built-in one for this name is used. */
+  questionFromPreset: boolean;
   /** Verdicts below this confidence escalate. */
   minConfidence: number;
   /** Model to run the evaluator on; the runner picks a default when absent. */

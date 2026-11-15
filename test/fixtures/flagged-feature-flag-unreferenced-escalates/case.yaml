@@ -1,0 +1,14 @@
+description: Declaring a flag the change never mentions escalates
+body: |
+  ```windlass
+  category: flagged_feature
+  flag: clip_reactions
+  ```
+ci:
+  - name: build
+    conclusion: success
+expect:
+  outcome: escalate
+  reasons: ["no added line references the flag `clip_reactions`"]
+  gates:
+    flagged_feature[0]:flag_referenced: fail

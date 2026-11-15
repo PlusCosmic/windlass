@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { Evaluations, hashRunnerToken } from "./evaluations.js";
 import { checkFor } from "./port.js";
 import { Service, ServiceError } from "./service.js";
-import { Store, type Repo } from "./store.js";
+import { Store, type Repo, type Runner } from "./store.js";
 import { accessTo, DOCS_DIFF, FakeGitHub, POLICY, pull, SRC_DIFF } from "./testing.js";
 
 let store: Store;
@@ -172,11 +173,127 @@ describe("simulate", () => {
 describe("catalog", () => {
   it("describes each gate's arguments as JSON Schema", () => {
     const gates = Object.fromEntries(service.catalog().map((gate) => [gate.name, gate]));
-    expect(Object.keys(gates).sort()).toEqual(["ci_green", "no_new_skips", "paths_only"]);
+    expect(Object.keys(gates).sort()).toEqual([
+      "ci_green",
+      "flag_referenced",
+      "no_new_skips",
+      "paths_none",
+      "paths_only",
+    ]);
     expect(gates.paths_only).toMatchObject({
       defaultOnFail: "escalate",
       args: { type: "array", items: { type: "string" } },
     });
     expect(gates.no_new_skips?.defaultOnFail).toBe("block");
+  });
+});
+
+describe("evaluators", () => {
+  const FLAGGED_POLICY = `policy: v1
+defaults:
+  always: [ci_green]
+categories:
+  flagged_feature:
+    gates:
+      - flag_referenced
+    evaluators:
+      - id: fully_flag_gated
+        min_confidence: 0.8
+    outcome: merge
+`;
+  const FLAG_DIFF = ["--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-old", '+if (flag("clip_search")) go();'].join(
+    "\n",
+  );
+  const body = "```windlass\ncategory: flagged_feature\nflag: clip_search\n```";
+  const verdict = (v: "pass" | "fail") => ({
+    verdict: v,
+    confidence: 0.95,
+    evidence: [{ file: "src/a.ts", line: 1, detail: "checked" }],
+  });
+
+  let evaluations: Evaluations;
+  let runner: Runner;
+
+  beforeEach(() => {
+    github = new FakeGitHub().add(pull(1, { body }), FLAG_DIFF).add(pull(2, { body }), FLAG_DIFF.replace("go", "run"));
+    github.policy = FLAGGED_POLICY;
+    evaluations = new Evaluations({ store });
+    runner = store.upsertRunner("r", hashRunnerToken("t".repeat(32)), null);
+    service = new Service({ store, github: accessTo(github), policyPath: ".windlass/policy.yaml", evaluations });
+    store.setPolicySource(repo.id, FLAGGED_POLICY);
+    repo = store.getRepo("acme", "app")!;
+  });
+
+  /** Answers whatever is queued, as a runner would. */
+  async function answerAll(v: "pass" | "fail"): Promise<number> {
+    let answered = 0;
+    for (let job = await evaluations.claim(runner, ["m"], 0); job; job = await evaluations.claim(runner, ["m"], 0)) {
+      evaluations.complete(runner, job.id, { ok: true, model: "m", output: verdict(v) });
+      answered++;
+    }
+    return answered;
+  }
+
+  it("waits for the runner's verdict when judging a live PR", async () => {
+    await evaluations.claim(runner, ["m"], 0);
+    const judging = service.judge(repo, 1);
+    const job = await evaluations.claim(runner, ["m"], 5_000);
+    expect(job!.user).toContain("feature flag `clip_search`");
+    expect(job!.user).not.toContain("windlass"); // nothing of the PR body
+    evaluations.complete(runner, job!.id, { ok: true, model: "m", output: verdict("pass") });
+
+    const decision = await judging;
+    expect(decision).toMatchObject({ outcome: "merge", evaluators: [{ status: "pass", model: "m" }] });
+    expect(github.comments.get(1)?.body).toContain("fully_flag_gated");
+  });
+
+  it("escalates a live PR when no runner is connected", async () => {
+    const decision = await service.judge(repo, 1);
+    expect(decision).toMatchObject({
+      outcome: "escalate",
+      evaluators: [{ status: "not_run", reason: "no evaluator runner is connected" }],
+    });
+  });
+
+  it("replays without asking anything, then asks on request and shows the verdicts", async () => {
+    await service.importPulls(repo, 10);
+    await evaluations.claim(runner, ["m"], 0);
+
+    const before = await service.simulate(repo, null);
+    expect(before.evaluators).toEqual({ online: true, models: ["m"], queued: 0 });
+    expect(before.pulls.map((p) => p.draft.evaluators[0]?.status)).toEqual(["not_run", "not_run"]);
+    expect(await evaluations.claim(runner, ["m"], 0)).toBeNull();
+
+    expect(await service.evaluateStored(repo, null)).toEqual({ queued: 2 });
+    expect(await service.evaluateStored(repo, null)).toEqual({ queued: 0 });
+    const waiting = await service.simulate(repo, null);
+    expect(waiting.evaluators.queued).toBe(2);
+    expect(waiting.pulls[0]!.draft.evaluators[0]).toMatchObject({
+      status: "not_run",
+      reason: "waiting for the runner",
+    });
+
+    expect(await answerAll("fail")).toBe(2);
+    const after = await service.simulate(repo, null);
+    expect(after.pulls.map((p) => [p.draft.outcome, p.draft.evaluators[0]?.status])).toEqual([
+      ["escalate", "fail"],
+      ["escalate", "fail"],
+    ]);
+
+    // A reworded question is a different question: its verdicts are not reused.
+    const draft = FLAGGED_POLICY.replace(
+      "        min_confidence",
+      "        question: Is it all behind {{flag}}?\n        min_confidence",
+    );
+    const reworded = await service.simulate(repo, draft);
+    expect(reworded.pulls.map((p) => p.draft.evaluators[0]?.status)).toEqual(["not_run", "not_run"]);
+    expect(reworded.pulls.map((p) => p.current.evaluators[0]?.status)).toEqual(["fail", "fail"]);
+  });
+
+  it("won't queue anything for an invalid draft or without a runner", async () => {
+    await service.importPulls(repo, 10);
+    await expect(service.evaluateStored(repo, null)).rejects.toThrow("no evaluator runner is connected");
+    await evaluations.claim(runner, ["m"], 0);
+    await expect(service.evaluateStored(repo, "policy: v2")).rejects.toThrow("invalid");
   });
 });

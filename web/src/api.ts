@@ -1,12 +1,17 @@
-import type { GateInfo, Simulation } from "../../app/src/service";
+import type { EvaluatorCatalog, GateInfo, Simulation } from "../../app/src/service";
 
-export type { GateInfo, SimulatedPull, Simulation } from "../../app/src/service";
+export type { EvaluatorCatalog, GateInfo, SimulatedPull, Simulation } from "../../app/src/service";
+
+/** Whether a runner is there to answer evaluators, and how many questions it has waiting. */
+export type RunnerStatus = Simulation["evaluators"];
 
 export interface Me {
   login: string;
   mode: "app" | "dev";
   policyPath: string;
   gates: GateInfo[];
+  /** The built-in questions an evaluator can ask, and what a question can refer to. */
+  evaluators: EvaluatorCatalog;
 }
 
 export interface RepoSummary {
@@ -52,6 +57,8 @@ export const api = {
   repos: () => call<RepoSummary[]>("/api/repos"),
   simulate: (repo: string, policy: string | null, signal?: AbortSignal) =>
     call<SimulationResponse>(`${repoPath(repo)}/simulate`, { policy }, signal),
+  /** Asks a runner every evaluator question the stored pull requests have no answer for. Answers show on later simulations. */
+  evaluate: (repo: string, policy: string | null) => call<{ queued: number }>(`${repoPath(repo)}/evaluate`, { policy }),
   importPulls: (repo: string, limit: number) => call<{ imported: number }>(`${repoPath(repo)}/import`, { limit }),
   propose: (repo: string, policy: string) => call<{ url: string }>(`${repoPath(repo)}/propose`, { policy }),
   signOut: () => call<{ ok: true }>("/auth/logout", {}),

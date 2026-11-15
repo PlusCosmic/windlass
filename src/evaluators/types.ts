@@ -8,6 +8,8 @@ import type { Intent } from "../intent.js";
  */
 export interface EvaluatorRequest {
   evaluator: string;
+  /** The question, with its placeholders filled from the declared intent. */
+  question: string;
   model?: string;
   headSha: string;
   diff: string;
@@ -34,6 +36,22 @@ export interface EvaluatorResponse {
 export interface EvaluatorRunner {
   run(request: EvaluatorRequest, signal: AbortSignal): Promise<EvaluatorResponse>;
 }
+
+/**
+ * Thrown by a runner that has no verdict and didn't ask for one: a replay that
+ * only reads stored verdicts, or no runner connected. The engine records
+ * `not_run` and escalates, as for any other evaluator failure.
+ */
+export class EvaluatorNotRun extends Error {
+  constructor(message = "not run yet") {
+    super(message);
+    this.name = "EvaluatorNotRun";
+  }
+}
+
+/** What the engine keeps of a verdict's evidence, however much the model returns. */
+export const MAX_EVIDENCE = 20;
+export const MAX_EVIDENCE_DETAIL = 600;
 
 export const VerdictSchema = z.strictObject({
   verdict: z.enum(["pass", "fail"]),

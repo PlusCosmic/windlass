@@ -92,8 +92,9 @@ function RawField({ value, onChange }: { value: unknown; onChange: (next: unknow
 
 /**
  * A form for a gate's arguments, drawn from the gate's JSON Schema: a list of
- * strings, or an object whose properties are lists of strings. Anything else
- * falls back to YAML. Empty arguments are removed, not written as empty lists.
+ * strings, or an object whose properties are lists of strings. A gate that
+ * takes none says so. Anything else falls back to YAML. Empty arguments are
+ * removed, not written as empty lists.
  */
 export function ArgsForm({
   schema,
@@ -117,6 +118,10 @@ export function ArgsForm({
   }
 
   const properties = Object.entries(shape.properties ?? {});
+  // Nothing to set. Arguments the file gives it anyway are shown as YAML, so they can be taken out.
+  if (shape.type === "object" && properties.length === 0 && (value === undefined || value === null)) {
+    return <p className="wl-muted">{copy.inspector.noSettings}</p>;
+  }
   if (shape.type === "object" && properties.length > 0 && properties.every(([, property]) => isStringList(property))) {
     const current =
       typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
